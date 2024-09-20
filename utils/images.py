@@ -41,6 +41,11 @@ def encode_image_base64_from_file(file_path, format="WEBP", max_size=(1000, 1000
         return None
 
 # Display image given base64-encoded string
-def display_image(utf8_encoded_image, width=100):
-    html = f'<img src="data:image/webp;base64,{utf8_encoded_image}" width="{width}"/>'
-    display(HTML(html))
+def display_image(utf8_encoded_image, height=200):
+    if isinstance(utf8_encoded_image, str):
+        html = f'<img src="data:image/webp;base64,{utf8_encoded_image}" height="{height}"/>'
+        display(HTML(html))
+    elif isinstance(utf8_encoded_image, list):
+        for img_str in utf8_encoded_image:
+            html = f'<img src="data:image/webp;base64,{img_str}" height="{height}"/>'
+            display(HTML(html))
