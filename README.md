@@ -1,1 +1,2 @@
-# multimodal-gen-ai-kr
+# Multimodal GenAI
+
