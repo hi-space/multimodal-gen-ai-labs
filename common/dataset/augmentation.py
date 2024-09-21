@@ -1,8 +1,8 @@
 import json
 from langchain.prompts import PromptTemplate
 
-from aws.claude import BedrockClaude
-from aws.embedding import BedrockEmbedding
+from common.aws.claude import BedrockClaude
+from common.aws.embedding import BedrockEmbedding
 
 
 class Augmentation():

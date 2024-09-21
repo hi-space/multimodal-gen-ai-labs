@@ -4,7 +4,7 @@ import pandas as pd
 from enum import Enum
 from io import BytesIO
 from PIL import Image
-from utils.images import display_image, encode_image_base64
+from common.utils.images import display_image, encode_image_base64
 
 
 class LanguageTag(Enum):
@@ -56,13 +56,11 @@ class DataLoader():
             
             if not row.empty:
                 row = row.iloc[0]
-
-                bucket = 'amazon-berkeley-objects'
-                key = f"images/small/{row['path']}"
-
-                response = self.s3_client.get_object(Bucket=bucket, Key=key)
+                response = self.s3_client.get_object(
+                    Bucket="amazon-berkeley-objects",
+                    Key=f"images/original/{row['path']}"
+                )
                 image_content = response['Body'].read()
-
                 return Image.open(BytesIO(image_content))
         except Exception as e:
             print(e)
@@ -74,11 +72,10 @@ class DataLoader():
             
             if not row.empty:
                 row = row.iloc[0]
-
-                bucket = 'amazon-berkeley-objects'
-                key = f"images/small/{row['path']}"
-
-                response = self.s3_client.get_object(Bucket=bucket, Key=key)
+                response = self.s3_client.get_object(
+                    Bucket="amazon-berkeley-objects",
+                    Key=f"images/small/{row['path']}"
+                )
                 image_content = response['Body'].read()
                 image = Image.open(BytesIO(image_content))
                 

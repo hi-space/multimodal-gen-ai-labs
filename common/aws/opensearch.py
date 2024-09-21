@@ -5,7 +5,7 @@ from requests_aws4auth import AWS4Auth
 from opensearchpy import OpenSearch, RequestsHttpConnection
 from langchain.vectorstores import OpenSearchVectorSearch
 
-from aws.embedding import BedrockEmbedding
+from common.aws.embedding import BedrockEmbedding
 
 
 class OpenSearchWrapper():

@@ -3,20 +3,18 @@ import re
 import json
 
 from typing import List, Optional
-from aws.claude import BedrockClaude
+from common.aws.claude import BedrockClaude
 from prompt import (
     get_llm_image_prompt,
     get_mm_llm_image_prompt,
     get_image_tags_prompt,
     get_translate_llm_prompt,
 )
-from utils.images import display_image
 
 
 def gen_english(request: str):
     prompt = get_translate_llm_prompt(request=request)
-    claude = BedrockClaude()
-    return claude.invoke_llm_response(prompt)
+    return BedrockClaude().invoke_llm_response(prompt)
 
 def gen_image_prompt(request: str,
                      style: str,

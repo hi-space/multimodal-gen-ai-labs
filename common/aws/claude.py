@@ -5,8 +5,6 @@ from botocore.config import Config
 from langchain_aws.chat_models import ChatBedrock
 from langchain.callbacks import StdOutCallbackHandler
 
-from utils.images import encode_image_base64
-
 
 class BedrockClaude():
     def __init__(self, region='us-west-2', modelId = 'anthropic.claude-3-5-sonnet-20240620-v1:0', **model_kwargs):
