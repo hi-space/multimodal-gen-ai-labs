@@ -46,7 +46,9 @@ class DataLoader():
         
         if not item_row.empty:
             json_str = item_row.to_json(orient="records")
-            return json.loads(json_str)[0]
+            item = json.loads(json_str)[0]
+            img = self.get_image(image_id=item.get('main_image_id'))
+            return item, img
         else:
             return None
         
