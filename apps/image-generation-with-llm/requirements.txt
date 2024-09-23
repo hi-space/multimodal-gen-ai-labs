@@ -1,0 +1,11 @@
+Pillow
+streamlit
+boto3
+botocore
+awscli
+langchain
+langchain_community
+langchain_aws
+python-dotenv
+pydantic-settings
+ipython

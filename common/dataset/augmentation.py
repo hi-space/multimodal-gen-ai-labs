@@ -68,7 +68,7 @@ class Augmentation():
     # generate description about image
     def describe_image(self, image: str = None):
         res = self.llm.invoke_llm_response(
-            text="Describe fashion items such as clothing and accessories in Korean. Don't describe people.",
+            text="Describe a item in image.",
             image=image,
         )
         return res

@@ -10,13 +10,19 @@ The image generation model used is [Amazon Titan Image Generator G1 v2](https://
 
 ## Getting Started
 
-```sh
-pip install -r requirements.txt
-streamlit run app.py
-# or
-docker build -t image-gen-gallery .
-docker run -p 8000:8000 image-gen-gallery
-```
+1. Copy the `.env.example` file and rename to `.env` and fill with your configuration.
+
+2. Python dependency modules can be installed with the following command
+
+    ```sh
+    pip install -r requirements.txt
+    ```
+
+3. Run an application
+
+    ```sh
+    streamlit run app.py
+    ```
 
 ## Preview
 
@@ -56,6 +62,6 @@ While these methods are useful for reflecting specific attributes of reference i
 
 ### Imaeg Gallery
 
-![Image Gallery](./assets/gallery.png)
-
 The generated images are stored in Amazon S3, while their CloudFront URLs and metadata are saved in DynamoDB. Users can view the generated images based on the stored data.
+
+![Image Gallery](./assets/gallery.png)
