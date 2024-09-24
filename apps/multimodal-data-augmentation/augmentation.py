@@ -84,7 +84,7 @@ class Augmentation():
             <instructions>
             1. Describe the image in as much detail as possible, referring to the <item> that contains the item's metadata.
             2. Write a prompt to generate an image in the form of a 3D icon, flat color and lighting, full shot, centered, digital, with a white background, as a design asset.
-            3. Write a images creation prompts under 400 characters. Use this fomat without further explanation:
+            3. The written prompt should be able to describe the given image within 400 characters. Use this fomat without further explanation:
             <prompt>image prompt</prompt>
             </instructions>
 
