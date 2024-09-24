@@ -26,17 +26,17 @@ class DataLoader():
         self.s3_client = boto3.client('s3')
 
     def show_item(self, item_id, detail=False) -> dict:
-        item = self.get_item(item_id=item_id)
+        item, img = self.get_item(item_id=item_id)
 
-        display_image(encode_image_base64(self.get_image(item.get('image_id'))))
         print(f"[{item.get('item_id')}] {item.get('item_name')}")
+        display_image(encode_image_base64(img))
         
         if detail:
             print(json.dumps(item, indent=4, ensure_ascii=False))
             for img in item['other_image_id']:
                 display_image(encode_image_base64(self.get_image(img)))
 
-        return item
+        return item, img
 
     def get_random_id(self) -> str:
         return self.dataset['item_id'].sample(n=1).iloc[0]

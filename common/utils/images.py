@@ -23,7 +23,7 @@ def encode_image_base64(image, format="WEBP", max_size=(1000, 1000)):
 # Function to encode image from a URL
 def encode_image_base64_from_url(img_url, format="WEBP", max_size=(1000, 1000)):
     try:
-        response = requests.get(img_url)
+        response = requests.get(img_url, timeout=10)
         response.raise_for_status()  # Raise an error for bad responses
         return encode_image_base64(BytesIO(response.content), format, max_size)
     except Exception as e:

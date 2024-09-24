@@ -12,8 +12,7 @@
 
 1. Access the model to be used in Bedrock
 2. Create OpenSearch Service domain
-3. Create DynamoDB table
-4. Set values in the `.env` file
+3. Set values in the `.env` file
 
 ## Notebooks
 
