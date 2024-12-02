@@ -1,3 +1,4 @@
+import os
 from io import BytesIO
 from PIL import Image
 import base64
@@ -49,3 +50,12 @@ def display_image(utf8_encoded_image, height=200):
         for img_str in utf8_encoded_image:
             html = f'<img src="data:image/webp;base64,{img_str}" height="{height}"/>'
             display(HTML(html))
+
+def base64_to_image(base64str: str):
+    return Image.open(BytesIO(base64.decodebytes(bytes(base64str, "utf-8"))))
+
+def save_base64_image(base64str: str, path: str):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    image = base64_to_image(base64str)
+    image.save(path)
+

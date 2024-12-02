@@ -2,6 +2,10 @@ import boto3
 import json
 from botocore.config import Config
 
+from langchain.schema import (
+    HumanMessage,
+    SystemMessage,
+)
 from langchain_aws.chat_models import ChatBedrock
 from langchain.callbacks import StdOutCallbackHandler
 
@@ -100,3 +104,28 @@ class BedrockClaude():
     def invoke_llm_response(self, text: str, image: str = None, system: str = None):
         return self.invoke_llm(
             text=text, image=image, system=system).get('content', [])[0].get('text', '')
+
+    def get_prompt(self, text: str = "그림을 상세히 묘사해줘", image: str = None):
+        content = []
+
+        if image:
+            content.append({
+                "type": "image_url",
+                "image_url": {
+                    "url": f"data:image/webp;base64,{image}",
+                },
+            })
+
+        content.append({
+            "type": "text",
+            "text": text
+        })
+
+        messages = [
+            SystemMessage(content="You are a helpful assistant."),
+            HumanMessage(
+                content=content
+            )
+        ]
+
+        return messages
