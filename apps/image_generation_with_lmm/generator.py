@@ -3,7 +3,7 @@ import re
 import json
 
 from typing import List, Optional
-from common.aws.claude import BedrockClaude
+from genai_kit.aws.claude import BedrockClaude
 from prompt import (
     get_llm_image_prompt,
     get_mm_llm_image_prompt,

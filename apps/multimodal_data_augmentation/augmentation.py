@@ -3,8 +3,8 @@ import re
 import json
 from langchain.prompts import PromptTemplate
 
-from common.aws.claude import BedrockClaude
-from common.aws.embedding import BedrockEmbedding
+from genai_kit.aws.claude import BedrockClaude
+from genai_kit.aws.embedding import BedrockEmbedding
 
 
 class Augmentation():
