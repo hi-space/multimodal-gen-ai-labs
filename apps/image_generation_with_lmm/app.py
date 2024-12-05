@@ -16,11 +16,11 @@ from generator import (
     gen_image, gen_image_prompt, gen_mm_image_prompt, gen_tags, gen_english
 )
 from prompt import DEFAULT_STYLE
-from params import ImageParams, ImageSize
-from common.aws.dynamodb import DynamoDB, _decimal_default
-from common.aws.s3 import S3
-from common.utils.images import encode_image_base64
-from common.utils.time import get_current_time
+from genai_kit.aws.amazon_image import BedrockAmazonImage, ImageParams, ImageSize
+from genai_kit.aws.dynamodb import DynamoDB, _decimal_default
+from genai_kit.aws.s3 import S3
+from genai_kit.utils.images import encode_image_base64
+from genai_kit.utils.time import getDatetimeStr
 
 
 CDN_URL = "" # Your CloudFront Endpoint URL
@@ -220,7 +220,7 @@ def upload_image(image: bytes, prompt: str, cfg: dict, tags = []):
         "prompt": prompt,
         "config": cfg,
         "tags": tags,
-        "created": get_current_time()
+        "created": getDatetimeStr()
     })
 
 
