@@ -23,7 +23,6 @@ def get_secrets_from_manager():
         secrets = json.loads(get_secret_value_response['SecretString'])
         return Settings(**secrets)
     except Exception as e:
-        print(e)
         return None
 
 
@@ -38,12 +37,9 @@ def get_settings():
                 S3_BUCKET=os.getenv("S3_BUCKET"),
                 CF_DOMAIN=os.getenv("CF_DOMAIN"),
             )
-            print("Loaded configuration from environment variables")
         except Exception as e:
-            print(f"Error loading settings from environment variables: {e}")
             return None
 
     return settings
 
 config = get_settings()
-print(f"{config}")

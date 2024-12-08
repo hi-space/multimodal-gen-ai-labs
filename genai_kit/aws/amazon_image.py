@@ -63,7 +63,7 @@ class TitanImageSize(Enum):
         self.height = height
 
 
-class NanoImageSize(Enum):
+class NovaImageSize(Enum):
     SIZE_512x512 = (512, 512)       # 1:1
     SIZE_1024x1024 = (1024, 1024)   # 1:1
     SIZE_2048x2048 = (2048, 2048)   # 1:1

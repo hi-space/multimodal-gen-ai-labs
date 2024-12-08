@@ -6,6 +6,7 @@ from langchain.prompts import PromptTemplate
 from config import config
 from genai_kit.aws.claude import BedrockClaude
 from genai_kit.aws.bedrock import BedrockModel
+from genai_kit.aws.amazon_image import BedrockAmazonImage, ImageParams
 
 
 def gen_english(request: str,
@@ -77,6 +78,24 @@ def gen_image(body: str, modelId: str):
     response_body = json.loads(response.get("body").read())
     image = response_body.get("images")
     return image
+
+
+def create_image_params(
+    seed: int,
+    count: int,
+    width: int,
+    height: int,
+    cfg: float
+) -> ImageParams:
+    """Create image generation parameters"""
+    img_params = ImageParams(seed=seed)
+    img_params.set_configuration(
+        count=count,
+        width=width,
+        height=height,
+        cfg=cfg
+    )
+    return img_params
 
 def _get_model_kwargs(temperature: Optional[float] = None,
                     top_p: Optional[float] = None, 
