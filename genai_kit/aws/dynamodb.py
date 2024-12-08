@@ -21,6 +21,21 @@ class DynamoDB:
             Item=json.loads(json.dumps(item), parse_float=Decimal)
         )
 
+    def update_item(self, id: str, updates: dict):
+        update_expression = "SET " + ", ".join([f"#{k} = :{k}" for k in updates.keys()])
+        expression_attribute_names = {f"#{k}": k for k in updates.keys()}
+        expression_attribute_values = {f":{k}": json.loads(
+            json.dumps(v), 
+            parse_float=Decimal
+        ) for k, v in updates.items()}
+        
+        self.table.update_item(
+            Key={"id": id},
+            UpdateExpression=update_expression,
+            ExpressionAttributeNames=expression_attribute_names,
+            ExpressionAttributeValues=expression_attribute_values
+        )
+
     def delete_item(self, id):
         self.table.delete_item(Key={"id": id})
         

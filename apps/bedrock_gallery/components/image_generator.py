@@ -13,8 +13,10 @@ from services.bedrock_service import (
     gen_image,
     create_image_params
 )
-from session import add_to_history
+from session import SessionManager, MediaType
 
+
+session_manager = SessionManager()
 
 def show_image_generator():
     st.title("🎨 Image Generator")
@@ -107,7 +109,7 @@ def _show_model_section():
     st.subheader("Select a Model")
     model_type = st.selectbox(
         "Choose a model:",
-        [BedrockModel.TITAN_IMAGE.value, BedrockModel.NOVA_CANVAS.value]
+        [BedrockModel.NOVA_CANVAS.value, BedrockModel.TITAN_IMAGE.value]
     )
 
     st.session_state.model_type = model_type
@@ -193,11 +195,13 @@ def _show_generated_images_section():
                     st.image(image_data, use_container_width=True)
             
             # Add to history
-            add_to_history("이미지 생성", {
-                "prompt": st.session_state.image_prompt,
-                "model": "Titan Image v2",
-                "request": configuration
-            })
+            session_manager.add_to_history(
+                media_type = MediaType.IMAGE_GEN,
+                prompt = st.session_state.image_prompt,
+                model_type = model_type,
+                media_file=image_data,
+                details = configuration,
+            )
             
             status.update(label="Generation completed!", state="complete")
             

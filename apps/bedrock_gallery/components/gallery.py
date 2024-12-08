@@ -1,6 +1,5 @@
 import streamlit as st
 import json
-from session import add_to_history
 
 
 def load_media_from_urls(urls_json):

@@ -1,5 +1,4 @@
 import streamlit as st
-from session import add_to_history
 
 
 def show_video_generator():
@@ -29,13 +28,14 @@ def show_video_generator():
             if generate_button:
                 with st.spinner("Generating video..."):
                     # Add video generation logic here
-                    add_to_history("비디오 생성", {
-                        "prompt": prompt,
-                        "duration": duration,
-                        "fps": fps,
-                        "quality": quality,
-                        "style": style
-                    })
+                    pass
+                    # add_to_history("비디오 생성", {
+                    #     "prompt": prompt,
+                    #     "duration": duration,
+                    #     "fps": fps,
+                    #     "quality": quality,
+                    #     "style": style
+                    # })
     
     with col2:
         st.subheader("Preview")
