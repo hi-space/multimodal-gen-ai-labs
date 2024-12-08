@@ -4,6 +4,14 @@ from PIL import Image
 from io import BytesIO
 import json
 from datetime import datetime
+import os
+import sys
+from config import config
+
+ROOT_PATH = os.path.abspath("../../")
+sys.path.append(ROOT_PATH)
+
+from genai_kit.aws.amazon_image import BedrockAmazonImage, ImageParams, ImageSize
 
 
 st.markdown("""
@@ -48,7 +56,9 @@ def load_media_from_urls(urls_json):
 def show_gallery():
     st.title("🖼️ Bedrock Gallery")
     
-    # expander 안에 설정 옵션들을 배치
+    with st.sidebar.expander("**이미지 생성**", icon='📤', expanded=True):
+        st.button("생성하기")
+    
     with st.sidebar.expander("**갤러리 설정**", icon='⚙️', expanded=True):
         # 필터 옵션
         options = ["이미지 보기", "비디오 보기"]
@@ -147,6 +157,111 @@ def show_history():
     else:
         st.info("아직 요청 기록이 없습니다.")
 
+def show_video_generator():
+    pass
+
+def show_image_generator():
+    st.title("🎨 Image Generator")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.subheader("Prompt")
+        prompt_type = st.selectbox(
+            "Choose an option:",
+            ["Basic Prompt", "LLM Prompt", "Multimodal LLM Prompt"]
+        )
+        
+        if prompt_type == "Basic Prompt":
+            prompt_text = st.text_area("Enter your prompt:")
+        elif prompt_type == "LLM Prompt":
+            style_text = st.text_area("Enter the style:", value="")
+            keyword_text = st.text_area("Enter the keyword:")
+        else:
+            reference_image = st.file_uploader("Upload a reference image:")
+            if reference_image:
+                st.image(reference_image, caption="Uploaded Image")
+            multimodal_keyword_text = st.text_area("Enter the multimodal keyword:")
+            
+        with st.expander("LLM Configuration"):
+            temperature = st.slider("Temperature", 0.0, 1.0, 0.7)
+            top_p = st.slider("Top P", 0.0, 1.0, 0.9)
+            top_k = st.slider("Top K", 0, 500, 250, 5)
+            
+        if st.button("Generate Prompt", type="primary"):
+            st.session_state.image_prompts = []
+            if prompt_type == "Basic Prompt":
+                pass
+                # st.session_state.image_prompts.extend([gen_english(request=prompt_text)])
+            elif prompt_type == "LLM Prompt":
+                pass
+                # st.session_state.image_prompts.extend(gen_image_prompt(
+                #     request=keyword_text,
+                #     style=style_text,
+                #     temperature=temperature,
+                #     top_p=top_p,
+                #     top_k=top_k
+                # ))
+            else:
+                pass
+                # image = encode_image_base64(reference_image)
+                # st.session_state.image_prompts.extend(gen_mm_image_prompt(
+                #     request=multimodal_keyword_text,
+                #     image=image,
+                #     temperature=temperature,
+                #     top_p=top_p,
+                #     top_k=top_k
+                # ))
+    
+    with col2:
+        st.subheader("Image Prompt")
+        if 'image_prompts' not in st.session_state:
+            st.session_state.image_prompts = []
+
+        st.text_area("prompt")
+        
+    
+    with col3:
+        st.subheader("Model")
+        prompt_type = st.selectbox(
+            "Choose a model:",
+            ["Basic Prompt", "LLM Prompt", "Multimodal LLM Prompt"]
+        )
+
+        st.subheader("Image Configurations")
+        with st.expander("Configuration", expanded=True):
+            num_images = st.slider("Number of Images", 1, 5, 1)
+            cfg_scale = st.slider("CFG Scale", 1.0, 10.0, 8.0, 0.5)
+            seed = st.number_input("Seed", 0, 2147483646, 0)
+            size_options = {f"{size.value[0]} X {size.value[1]}": size for size in ImageSize}
+            selected_size = st.selectbox("Image Size", options=list(size_options.keys()))
+            
+            use_colors = st.checkbox("Using color references")
+            if use_colors:
+                color_picker = st.color_picker("Pick a color")
+                if 'selected_colors' not in st.session_state:
+                    st.session_state.selected_colors = []
+                if color_picker and color_picker not in st.session_state.selected_colors:
+                    st.session_state.selected_colors.append(color_picker)
+                
+                st.session_state.selected_colors = st.multiselect(
+                    "Selected Colors",
+                    options=st.session_state.selected_colors,
+                    default=st.session_state.selected_colors,
+                    max_selections=10
+                )
+                
+                if st.session_state.selected_colors:
+                    color_html = "<div style='display: flex; flex-wrap: wrap;'>"
+                    for color in st.session_state.selected_colors:
+                        color_html += f"<div style='width: 24px; height: 24px; background-color: {color}; margin-left: 5px; margin-bottom: 8px; border-radius: 5px;'></div>"
+                    color_html += "</div>"
+                    st.markdown(color_html, unsafe_allow_html=True)
+        
+        if st.button("Generate Images", type="primary"):
+            pass
+            # generate_images(selected_prompts, num_images, cfg_scale, seed, size_options[selected_size])
+
 def add_to_history(request_type, details):
     if 'request_history' not in st.session_state:
         st.session_state.request_history = []
@@ -162,10 +277,18 @@ def add_to_history(request_type, details):
 def main():
     st.sidebar.title("Amazon Bedrock Gallery")
     st.sidebar.caption("Made by [hi-space](https://github.com/hi-space/multimodal-gen-ai-labs.git)")
-    st.sidebar.info("""📚 **Note:** Please ensure you have both **Bedrock Model Access** and **S3 permissions** enabled.""")
+    
+    st.sidebar.info("""📚 **Requirements:** 
+- Bedrock Model Access
+- S3 Bucket
+- CloudFront distribution (for S3)
+- DynamoDB Table
+""")
     
     # 탭 생성
-    gallery_tab, history_tab = st.tabs(["Gallery", "History"])
+    gallery_tab, image_generator_tab, video_generator_tab, history_tab = st.tabs([
+        "🖼️ Gallery", "🎨 Generator", "🎥 Generator", "📋 History"
+    ])
 
     add_to_history("이미지 생성", {
         "prompt": "user_prompt",
@@ -184,6 +307,12 @@ def main():
         
     with gallery_tab:
         show_gallery()
+
+    with image_generator_tab:
+        show_image_generator()
+
+    with video_generator_tab:
+        show_video_generator()
 
 if __name__ == "__main__":
     main()
