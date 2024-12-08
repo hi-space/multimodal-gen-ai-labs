@@ -16,7 +16,7 @@ from generator import (
     gen_image, gen_image_prompt, gen_mm_image_prompt, gen_tags, gen_english
 )
 from prompt import DEFAULT_STYLE
-from genai_kit.aws.amazon_image import BedrockAmazonImage, ImageParams, ImageSize
+from genai_kit.aws.amazon_image import BedrockAmazonImage, ImageParams, TitanImageSize
 from genai_kit.aws.dynamodb import DynamoDB, _decimal_default
 from genai_kit.aws.s3 import S3
 from genai_kit.utils.images import encode_image_base64
@@ -129,7 +129,7 @@ def render_configuration_section():
         num_images = st.slider("Number of Images", min_value=1, max_value=5, value=1, step=1)
         cfg_scale = st.slider("CFG Scale", min_value=1.0, max_value=10.0, value=8.0, step=0.5)
         seed = st.number_input("Seed", min_value=0, value=0, max_value=2147483646, step=1)
-        size_options = {f"{size.value[0]} X {size.value[1]}": size for size in ImageSize}
+        size_options = {f"{size.value[0]} X {size.value[1]}": size for size in TitanImageSize}
         selected_size = st.selectbox("Image Size", options=list(size_options.keys()))
         
         st.session_state.use_colors = st.checkbox("Using color references", value=False)

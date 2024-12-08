@@ -67,9 +67,11 @@ def display_video(video_bytes: bytes, width=800):
     except:
         pass
 
+def base64_to_bytes(base64str: str):
+    return BytesIO(base64.decodebytes(bytes(base64str, "utf-8")))
 
 def base64_to_image(base64str: str):
-    return Image.open(BytesIO(base64.decodebytes(bytes(base64str, "utf-8"))))
+    return Image.open(base64_to_bytes(base64str))
 
 def save_base64_image(base64str: str, path: str):
     os.makedirs(os.path.dirname(path), exist_ok=True)

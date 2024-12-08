@@ -1,49 +1,22 @@
-import streamlit as st
-import requests
-from PIL import Image
-from io import BytesIO
-import json
-from datetime import datetime
 import os
 import sys
+sys.path.append(os.path.abspath("../../"))
+
+import streamlit as st
+import requests
+import json
+from datetime import datetime
+from PIL import Image
+from io import BytesIO
+
 from config import config
+from generator import gen_english, gen_mm_image_prompt, gen_image
+from genai_kit.aws.amazon_image import (
+    BedrockAmazonImage, ImageParams, TitanImageSize, NanoImageSize
+)
+from genai_kit.utils.images import encode_image_base64, base64_to_bytes
+from genai_kit.aws.bedrock import BedrockModel
 
-ROOT_PATH = os.path.abspath("../../")
-sys.path.append(ROOT_PATH)
-
-from genai_kit.aws.amazon_image import BedrockAmazonImage, ImageParams, ImageSize
-
-
-st.markdown("""
-    <style>
-        /* 이미지 스타일링 */
-        .stImage {
-            border-radius: 8px !important;
-            transition: transform 0.2s !important;
-            cursor: pointer !important;
-        }
-        .stImage:hover {
-            transform: scale(1.03) !important;
-        }
-        
-        /* 이미지 캡션 스타일링 */
-        .stImage img {
-            border-radius: 8px !important;
-        }
-            
-        video {
-            border-radius: 8px !important;
-        }
-        
-        /* 히스토리 카드 스타일링 */
-        div[data-testid="stExpander"] {
-            background-color: #f8f9fa;
-            border-radius: 8px;
-            margin-bottom: 1rem;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.12);
-        }
-    </style>
-""", unsafe_allow_html=True)
 
 def load_media_from_urls(urls_json):
     try:
@@ -162,78 +135,82 @@ def show_video_generator():
 
 def show_image_generator():
     st.title("🎨 Image Generator")
+    image_prompt = ""
+
+    if 'image_prompt' not in st.session_state:
+        st.session_state.image_prompt = ""
+    if 'selected_colors' not in st.session_state:
+        st.session_state.selected_colors = []
+    if 'use_colors' not in st.session_state:
+        st.session_state.use_colors = False
     
     col1, col2, col3 = st.columns(3)
     
     with col1:
-        st.subheader("Prompt")
+        st.subheader("1. Prompt")
         prompt_type = st.selectbox(
             "Choose an option:",
-            ["Basic Prompt", "LLM Prompt", "Multimodal LLM Prompt"]
+            ["Basic Prompt", "Augmented Prompt"]
         )
-        
-        if prompt_type == "Basic Prompt":
-            prompt_text = st.text_area("Enter your prompt:")
-        elif prompt_type == "LLM Prompt":
-            style_text = st.text_area("Enter the style:", value="")
-            keyword_text = st.text_area("Enter the keyword:")
-        else:
-            reference_image = st.file_uploader("Upload a reference image:")
-            if reference_image:
-                st.image(reference_image, caption="Uploaded Image")
-            multimodal_keyword_text = st.text_area("Enter the multimodal keyword:")
-            
+
         with st.expander("LLM Configuration"):
             temperature = st.slider("Temperature", 0.0, 1.0, 0.7)
             top_p = st.slider("Top P", 0.0, 1.0, 0.9)
             top_k = st.slider("Top K", 0, 500, 250, 5)
+        
+        if prompt_type == "Basic Prompt":
+            prompt_text = st.text_area("Enter your prompt:")
+        elif prompt_type == "Augmented Prompt":
+            multimodal_keyword_text = st.text_area("Enter the keyword:")
+            reference_image = st.file_uploader("Upload a reference image:")
+            if reference_image:
+                st.image(reference_image, caption="Uploaded Image")
             
-        if st.button("Generate Prompt", type="primary"):
-            st.session_state.image_prompts = []
+        if st.button("Generate Prompt", type="primary", use_container_width=True):
+            st.session_state.image_prompt = ""
             if prompt_type == "Basic Prompt":
-                pass
-                # st.session_state.image_prompts.extend([gen_english(request=prompt_text)])
-            elif prompt_type == "LLM Prompt":
-                pass
-                # st.session_state.image_prompts.extend(gen_image_prompt(
-                #     request=keyword_text,
-                #     style=style_text,
-                #     temperature=temperature,
-                #     top_p=top_p,
-                #     top_k=top_k
-                # ))
-            else:
-                pass
-                # image = encode_image_base64(reference_image)
-                # st.session_state.image_prompts.extend(gen_mm_image_prompt(
-                #     request=multimodal_keyword_text,
-                #     image=image,
-                #     temperature=temperature,
-                #     top_p=top_p,
-                #     top_k=top_k
-                # ))
+                st.session_state.image_prompt = gen_english(
+                    request=prompt_text,
+                    temperature=temperature,
+                    top_p=top_p,
+                    top_k=top_k
+                )
+            elif prompt_type == "Augmented Prompt":
+                image = None
+                if reference_image:
+                    image = encode_image_base64(reference_image)
+                st.session_state.image_prompt = gen_mm_image_prompt(
+                    keyword=multimodal_keyword_text,
+                    image=image,
+                    temperature=temperature,
+                    top_p=top_p,
+                    top_k=top_k
+                )
     
     with col2:
-        st.subheader("Image Prompt")
-        if 'image_prompts' not in st.session_state:
-            st.session_state.image_prompts = []
+        st.subheader("2. Image Prompt")
+        if 'image_prompt' not in st.session_state:
+            st.session_state.image_prompt = ""
 
-        st.text_area("prompt")
-        
-    
+        st.text_area(
+            label="prompt",
+            value=st.session_state.image_prompt,
+            height=200
+        )
+            
     with col3:
-        st.subheader("Model")
+        st.subheader("3. Model")
         prompt_type = st.selectbox(
             "Choose a model:",
-            ["Basic Prompt", "LLM Prompt", "Multimodal LLM Prompt"]
+            ["Titan Image v2", "Nano Canvas"]
         )
 
-        st.subheader("Image Configurations")
+        st.subheader("Configurations")
         with st.expander("Configuration", expanded=True):
             num_images = st.slider("Number of Images", 1, 5, 1)
             cfg_scale = st.slider("CFG Scale", 1.0, 10.0, 8.0, 0.5)
             seed = st.number_input("Seed", 0, 2147483646, 0)
-            size_options = {f"{size.value[0]} X {size.value[1]}": size for size in ImageSize}
+            size_options = {f"{size.value[0]} X {size.value[1]}": size for size in TitanImageSize}
             selected_size = st.selectbox("Image Size", options=list(size_options.keys()))
             
             use_colors = st.checkbox("Using color references")
@@ -258,10 +235,56 @@ def show_image_generator():
                     color_html += "</div>"
                     st.markdown(color_html, unsafe_allow_html=True)
         
-        if st.button("Generate Images", type="primary"):
-            pass
-            # generate_images(selected_prompts, num_images, cfg_scale, seed, size_options[selected_size])
+        if st.button("Generate Images", type="primary", use_container_width=True):
+            generate_images(
+                st.session_state.image_prompt,
+                num_images,
+                cfg_scale,
+                seed,
+                size_options[selected_size]
+            )
 
+
+def generate_images(image_prompt, num_images, cfg_scale, seed, selected_size):
+    st.divider()
+    st.subheader("Image Generation")
+    with st.status("Generating...", expanded=True):
+        img_params = ImageParams(seed=seed)
+        img_params.set_configuration(
+            count=num_images,
+            width=selected_size.width,
+            height=selected_size.height,
+            cfg=cfg_scale
+        )
+
+        cfg = img_params.get_configuration()
+
+        if st.session_state.use_colors:
+            body = img_params.color_guide(text=image_prompt, colors=st.session_state.selected_colors)
+            cfg['colorGuide'] = st.session_state.selected_colors
+        else:
+            body = img_params.text_to_image(text=image_prompt)
+
+        imgs = gen_image(body=body, modelId=BedrockModel.TITAN_IMAGE)
+        
+        st.info(image_prompt)
+        cols = st.columns(len(imgs))
+        for idx, img in enumerate(imgs):
+            with cols[idx]:
+                image_data = base64_to_bytes(img)
+                # image_data = BytesIO(base64.b64decode(img))
+
+                st.image(image_data)
+                
+                # with st.spinner("Upload..."):
+                #     upload_image(
+                #         image=image_data,
+                #         prompt=image_prompt,
+                #         cfg=cfg,
+                #         tags=tags
+                #     )
+
+    
 def add_to_history(request_type, details):
     if 'request_history' not in st.session_state:
         st.session_state.request_history = []
@@ -275,6 +298,38 @@ def add_to_history(request_type, details):
 
 
 def main():
+    st.set_page_config(page_title="My App", layout="wide")
+    st.markdown("""
+        <style>
+            /* 이미지 스타일링 */
+            .stImage {
+                border-radius: 8px !important;
+                transition: transform 0.2s !important;
+                cursor: pointer !important;
+            }
+            .stImage:hover {
+                transform: scale(1.03) !important;
+            }
+            
+            /* 이미지 캡션 스타일링 */
+            .stImage img {
+                border-radius: 8px !important;
+            }
+                
+            video {
+                border-radius: 8px !important;
+            }
+            
+            /* 히스토리 카드 스타일링 */
+            div[data-testid="stExpander"] {
+                background-color: #f8f9fa;
+                border-radius: 8px;
+                margin-bottom: 1rem;
+                box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+            }
+        </style>
+    """, unsafe_allow_html=True)
+
     st.sidebar.title("Amazon Bedrock Gallery")
     st.sidebar.caption("Made by [hi-space](https://github.com/hi-space/multimodal-gen-ai-labs.git)")
     
@@ -286,7 +341,7 @@ def main():
 """)
     
     # 탭 생성
-    gallery_tab, image_generator_tab, video_generator_tab, history_tab = st.tabs([
+    image_generator_tab, gallery_tab, video_generator_tab, history_tab = st.tabs([
         "🖼️ Gallery", "🎨 Generator", "🎥 Generator", "📋 History"
     ])
 
