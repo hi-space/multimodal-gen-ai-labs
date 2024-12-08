@@ -17,9 +17,11 @@ class VideoStatus(Enum):
 class BedrockAmazonVideo():
     def __init__(self,
                  bucket_name: str,
+                 bucket_region: str = 'us-east-1',
                  region='us-east-1',
                  modelId = BedrockModel.NOVA_REAL):
         self.bucket_name = bucket_name
+        self.bucket_region = bucket_region
         self.region = region
         self.modelId = modelId
         self.bedrock = boto3.client(
@@ -119,6 +121,6 @@ class BedrockAmazonVideo():
             if not s3Uri:
                 raise ValueError(f"No S3 URI found for invocation ARN: {invocation_arn}")
         
-        s3 = S3(bucket_name=self.bucket_name, region=self.region)
+        s3 = S3(bucket_name=self.bucket_name, region=self.bucket_region)
         key = s3.extract_key_from_uri(s3Uri)
         return s3.get_object(f"{key}/output.mp4")
