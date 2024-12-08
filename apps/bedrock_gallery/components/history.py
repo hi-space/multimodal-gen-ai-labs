@@ -27,7 +27,7 @@ def show_history():
     _display_history_items(filter_type)
 
 def _display_history_items(filter_type):
-    history = session_manager.get_history(include_media=True)
+    history = session_manager.get_history()
 
     if history:
         filtered_history = [item for item in history 
