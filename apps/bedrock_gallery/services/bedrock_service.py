@@ -16,7 +16,7 @@ def gen_english(request: str,
     prompt = PromptTemplate(
                 template="""You are an Assistant for translation.
                 Always change the contents in <request> to English without any additional descriptions or tags.
-                If there is no <request>, please suggest a new keyword to generate images  without any additional descriptions or tags.
+                If there is no <request>, please suggest a new keyword about prop, animal, object or scene without any additional descriptions or tags.
                                 
                 <request>
                 {request}

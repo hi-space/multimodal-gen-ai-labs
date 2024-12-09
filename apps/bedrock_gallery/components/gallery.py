@@ -6,9 +6,9 @@ from utils import format_datetime
 
 
 def show_gallery(session_manager: SessionManager):
-    st.title("🖼️ Bedrock Gallery")
+    st.title("🖼️ GenAI Gallery")
     
-    with st.sidebar.expander("**갤러리 설정**", icon='⚙️', expanded=True):
+    with st.sidebar.expander("**갤러리 설정**", icon='⚙️', expanded=False):
         # Media type filter
         media_types = [type.value for type in MediaType]
         selected_types = st.multiselect(
@@ -20,41 +20,38 @@ def show_gallery(session_manager: SessionManager):
         # Layout settings
         cols_per_row = st.slider("열 수 설정", min_value=1, max_value=5, value=3)
         
-    # Load and display media
-    media_items = []
-    for media_type in selected_types:
-        items = session_manager.storage_service.get_media_list(media_type=media_type) or []
-        media_items.extend(items)
-    
-    # Sort by creation date, newest first
-    media_items = sorted(
-        media_items,
-        key=lambda x: x.get('created_at', ''),
-        reverse=True
-    )
-    
-    _display_media_grid(media_items, cols_per_row)
+        # Detail view toggle
+        show_details = st.checkbox("상세 정보 표시", value=False)
+        
+    media_items = session_manager.get_history()
+    if media_items:
+        filtered_media_items = [item for item in media_items 
+                            if item['media_type'] in selected_types]
+        
+        filtered_media_items = sorted(
+            filtered_media_items,
+            key=lambda x: x.get('created_at', ''),
+            reverse=True
+        )
 
-def _display_media_grid(media_items: List[Dict[str, Any]], cols_per_row: int):
-    """Display media items in a responsive grid"""
-    if not media_items:
+        _display_media_grid(filtered_media_items, cols_per_row, show_details)
+    else:
         st.info("표시할 미디어가 없습니다.")
-        return
-    
-    # Create columns for the grid
+
+
+def _display_media_grid(media_items: List[Dict[str, Any]], cols_per_row: int, show_details: bool):
     cols = st.columns(cols_per_row)
     
     for idx, item in enumerate(media_items):
         col_idx = idx % cols_per_row
         
         with cols[col_idx]:
-            _display_media_item(item)
+            _display_media_item(item, show_details)
 
-def _display_media_item(item: Dict[str, Any]):
-    """Display individual media item with metadata"""
+
+def _display_media_item(item: Dict[str, Any], show_details: bool):
     container = st.container()
     
-    # Display media content
     media_type = item.get('media_type', '')
     url = item.get('url', '')
     
@@ -63,12 +60,14 @@ def _display_media_item(item: Dict[str, Any]):
     elif media_type == MediaType.VIDEO.value:
         container.video(url)
     
-    # Display metadata in expander
-    with container.expander(format_datetime(item.get('created_at', ''), seconds=False), expanded=False):
-        st.code(item.get('prompt', ''), wrap_lines=True, language='txt')
-        
-        st.markdown("**모델:**")
-        st.text(item.get('model_type', ''))
-        if details := item.get('details'):
-            st.markdown("**상세 정보:**")
-            st.json(json.loads(json.dumps(details, default=float)), expanded=False)
+    container.caption(f"_{item.get('prompt', '')}_")
+    
+    if show_details:
+        with container.expander(format_datetime(item.get('created_at', ''), seconds=False), expanded=False):
+            st.code(item.get('prompt', ''), wrap_lines=True, language='txt')
+            
+            st.markdown("**모델:**")
+            st.text(item.get('model_type', ''))
+            if details := item.get('details'):
+                st.markdown("**상세 정보:**")
+                st.json(json.loads(json.dumps(details, default=float)), expanded=False)

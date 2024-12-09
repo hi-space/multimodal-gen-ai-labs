@@ -16,9 +16,7 @@ from services.bedrock_service import (
 from session import SessionManager, MediaType
 
 
-session_manager = SessionManager()
-
-def show_image_generator():
+def show_image_generator(session_manager: SessionManager):
     st.title("🎨 Image Generator")
     _initialize_session_state()
     
@@ -34,7 +32,7 @@ def show_image_generator():
         generate_clicked = _show_model_section()
     
     if generate_clicked:
-        _show_generated_images_section()
+        _show_generated_images_section(session_manager)
 
 def _initialize_session_state():
     """Initialize session state variables"""
@@ -153,7 +151,7 @@ def _get_model_configurations(model_type):
         'selected_colors': selected_colors
     }
 
-def _show_generated_images_section():
+def _show_generated_images_section(session_manager: SessionManager):
     """Display the generated images section"""
     st.divider()
     st.subheader("Generated Images")

@@ -1,7 +1,5 @@
 import os
 import sys
-
-from apps.bedrock_gallery.session import SessionManager
 sys.path.append(os.path.abspath("../../"))
 
 import streamlit as st
@@ -15,6 +13,7 @@ from components.gallery import show_gallery
 from components.image_generator import show_image_generator
 from components.video_generator import show_video_generator
 from components.history import show_history
+from session import SessionManager
 
 
 def main():
@@ -38,15 +37,15 @@ def main():
     
 
     session_manager = SessionManager()
-    
-    with gallery_tab:
-        show_gallery(session_manager)
 
     with image_generator_tab:
-        show_image_generator()
+        show_image_generator(session_manager)
 
     with video_generator_tab:
         show_video_generator()
+    
+    with gallery_tab:
+        show_gallery(session_manager)
 
     with history_tab:
         show_history(session_manager)
