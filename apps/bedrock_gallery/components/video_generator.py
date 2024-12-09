@@ -75,8 +75,6 @@ def _show_video_prompt_input_section():
         
         if reference_image:
             st.image(reference_image)
-
-            print(type(reference_image))
             
         if st.button("Generate Video Prompt", icon='📝', type="primary", use_container_width=True, key="video_gen_mm_prompt_btn"):
             with st.spinner("Generating video prompt..."):

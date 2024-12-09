@@ -15,7 +15,6 @@ class SessionManager:
             bucket_name=config.S3_BUCKET,
             cloudfront_domain=config.CF_DOMAIN
         )
-        self.task_manager = AsyncTaskManager(self.storage_service)
 
     def add_to_history(
         self,
@@ -37,12 +36,6 @@ class SessionManager:
                 details=details,
                 image=media_file,
             )
-
-            if media_type == MediaType.VIDEO:
-                self.task_manager.start_video_polling(
-                    task_id=storage_metadata['id'],
-                    invocation_arn=details['invocationArn']
-                )
         except Exception as e:
             st.error(f"Failed to upload media: {str(e)}")
             return None

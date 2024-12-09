@@ -1,11 +1,13 @@
 import boto3
-import uuid
+from io import BytesIO
 from typing import Dict, Any, BinaryIO, List, Optional
 from datetime import datetime
+from apps.bedrock_gallery.services.bedrock_service import list_video_job
 from config import config
 from genai_kit.aws.bedrock import BedrockModel
 from genai_kit.aws.dynamodb import DynamoDB
 from genai_kit.utils.random import random_id
+from genai_kit.utils.images import get_thumbnail
 from apps.bedrock_gallery.utils import extract_key_from_uri
 from apps.bedrock_gallery.types import MediaType
 
@@ -110,9 +112,9 @@ class StorageService:
     
     def update_video_status(
         self,
-        model_type: str,
-        prompt: str,
-        details: Dict[str, Any],
+        model_type: Optional[str] = None,
+        prompt: Optional[str] = None,
+        details: Optional[Dict[str, Any]] = None,
         image: Optional[BinaryIO] = None,
         thumbnail: Optional[str] = None,
         id: Optional[str] = None,
@@ -120,17 +122,13 @@ class StorageService:
         id = id or random_id()
         now = datetime.now().isoformat()
         
-        url = ''
-        if image:
-            url = self.upload_to_s3(image, id)
-
         record = {
             "id": id,
             "media_type": MediaType.VIDEO.value,
             "model_type": model_type,
             "prompt": prompt,
-            "url": url,
-            "thumbnail": thumbnail or url,
+            "url": f"{self.cloudfront_domain}/{id}/output.mp4",
+            "thumbnail": f"{self.cloudfront_domain}/{id}/thumbnail.png",
             "updated_at": now,
             "details": details
         }
@@ -155,7 +153,6 @@ class StorageService:
         except Exception as e:
             raise Exception(f"Failed to store metadata in DynamoDB: {str(e)}")
 
-        print('record', record)
         return record
 
     def get_media_metadata(self, id: str) -> Dict[str, Any]:
@@ -173,9 +170,13 @@ class StorageService:
     def get_media_list(
         self,
         media_type: str = None,
+        sync=True,
     ) -> List[Dict[str, Any]]:
         """Retrieve media list from DynamoDB"""
         try:
+            if sync:
+                self.sync_video_jobs()
+
             if media_type:
                 query = {
                     'FilterExpression': '#type = :type_val',
@@ -189,3 +190,47 @@ class StorageService:
             return response.get('Items', [])
         except Exception as e:
             raise Exception(f"Failed to retrieve media list: {str(e)}")
+        
+    def sync_video_jobs(self) -> None:
+        """Sync video job statuses from Bedrock and update DynamoDB records."""
+        try:
+            job_list = list_video_job()
+            media_list = self.get_media_list(media_type=MediaType.VIDEO.value, sync=False)
+            media_map = {item['id']: item for item in media_list}
+        
+            for job in job_list:
+                job_id = extract_key_from_uri(
+                    job.get('outputDataConfig', {}).get('s3OutputDataConfig', {}).get('s3Uri', '')
+                )
+                if not job_id or job_id not in media_map:
+                    continue
+                
+                job_status = job.get('status')
+                if media_map[job_id].get('details', {}).get('status', '') != job_status:
+                    if job_status == 'Completed':
+                        thumbnail = self._save_thumbnail(job_id)
+
+                        self.update_video_status(
+                            details=job,
+                            thumbnail=thumbnail,
+                            id=job_id
+                        )
+
+        except Exception as e:
+            raise Exception(f"Failed to sync video jobs: {str(e)}")
+        
+    def _save_thumbnail(self, job_id) -> str:
+        try:
+            video_bytes = self.s3_client.get_object(
+                Bucket=config.S3_BUCKET,
+                Key = f"{job_id}/output.mp4"
+            )['Body'].read()
+            thumbnail_bytes = get_thumbnail(video_bytes)
+
+            return self.upload_to_s3(
+                image=BytesIO(thumbnail_bytes),
+                image_id=f"{job_id}/thumbnail",
+            )
+        except Exception as e:
+            raise Exception(f"Failed to save thumbnail: {str(e)}")
+        

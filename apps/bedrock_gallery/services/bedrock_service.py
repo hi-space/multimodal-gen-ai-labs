@@ -147,7 +147,7 @@ def gen_video(text: str, image: str = None, params: dict = {}):
         modelInput=model_input,
         outputDataConfig={
             "s3OutputDataConfig": {
-                "s3Uri": f"s3://{config.S3_BUCKET}/video/"
+                "s3Uri": f"s3://{config.S3_BUCKET}"
             }
         }
     )
