@@ -42,7 +42,7 @@ def main():
         show_image_generator(session_manager)
 
     with video_generator_tab:
-        show_video_generator()
+        show_video_generator(session_manager)
     
     with gallery_tab:
         show_gallery(session_manager)

@@ -3,17 +3,17 @@ import uuid
 from typing import Dict, Any, BinaryIO, List, Optional
 from datetime import datetime
 from config import config
+from genai_kit.aws.bedrock import BedrockModel
 from genai_kit.aws.dynamodb import DynamoDB
 from genai_kit.utils.random import random_id
+from apps.bedrock_gallery.utils import extract_key_from_uri
+from apps.bedrock_gallery.types import MediaType
 
 
 class StorageService:
     def __init__(self, bucket_name: str, cloudfront_domain: str):
         self.s3_client = boto3.client('s3')
-        self.dynamodb = DynamoDB(
-            region='ap-northeast-2',
-            table_name=config.DYNAMO_TABLE,
-        )
+        self.dynamodb = DynamoDB(table_name=config.DYNAMO_TABLE)
         self.bucket_name = bucket_name
         self.cloudfront_domain = cloudfront_domain
         
@@ -30,34 +30,55 @@ class StorageService:
             return f"{self.cloudfront_domain}/{filename}"
         except Exception as e:
             raise Exception(f"Failed to upload image to S3: {str(e)}")
+        
+    def upload_media(
+        self,
+        media_type: MediaType,
+        model_type: BedrockModel,
+        prompt: str,
+        details: Optional[Dict[str, Any]] = None,
+        image: Optional[BinaryIO] = None,
+    ):
+        if media_type == MediaType.IMAGE:
+            return self.upload_image(
+                model_type=model_type.value,
+                prompt=prompt,
+                details=details,
+                image=image,
+            )
+        elif media_type == MediaType.VIDEO:
+            s3Uri = details.get("outputDataConfig", {}).get("s3OutputDataConfig", {}).get("s3Uri", "")
+            id = extract_key_from_uri(s3Uri)
+            return self.update_video_status(
+                model_type=model_type.value,
+                prompt=prompt,
+                details=details,
+                image=image,
+                id=id,
+            )    
 
     def upload_image(
         self,
-        media_type: str,
         model_type: str,
         prompt: str,
         details: Dict[str, Any],
-        status: str,
-        image: BinaryIO = None,
+        image: Optional[BinaryIO] = None,
         thumbnail: Optional[str] = None,
         id: Optional[str] = None,
     ) -> Dict[str, Any]:
         image_id = id or random_id()
+        now = datetime.now().isoformat()
         url = None
 
         if image:
             url = self.upload_to_s3(image, image_id)
 
-        image_id = id or random_id()
-        now = datetime.now().isoformat()
-        
         url = url or f"{self.cloudfront_domain}/{image_id}"
         record = {
             "id": image_id,
-            "media_type": media_type,
+            "media_type": MediaType.IMAGE.value,
             "model_type": model_type,
             "prompt": prompt,
-            "status": status,
             "url": url,
             "thumbnail": thumbnail or url,
             "updated_at": now,
@@ -70,7 +91,6 @@ class StorageService:
             if existing_item:
                 updates = {
                     'model_type': model_type,
-                    'status': status,
                     'url': record['url'],
                     'thumbnail': record['thumbnail'],
                     'updated_at': now,
@@ -80,7 +100,6 @@ class StorageService:
                 self.dynamodb.update_item(image_id, updates)
                 record = self.dynamodb.get_item(image_id)
             else:
-                # Create new record
                 record['created_at'] = now
                 self.dynamodb.put_item(record)
 
@@ -88,20 +107,56 @@ class StorageService:
             raise Exception(f"Failed to store metadata in DynamoDB: {str(e)}")
 
         return record
+    
+    def update_video_status(
+        self,
+        model_type: str,
+        prompt: str,
+        details: Dict[str, Any],
+        image: Optional[BinaryIO] = None,
+        thumbnail: Optional[str] = None,
+        id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        id = id or random_id()
+        now = datetime.now().isoformat()
+        
+        url = ''
+        if image:
+            url = self.upload_to_s3(image, id)
 
-    def update_status(self, id: str, status: str) -> Dict[str, Any]:
-        """
-        Update only the status of an existing record
-        """
+        record = {
+            "id": id,
+            "media_type": MediaType.VIDEO.value,
+            "model_type": model_type,
+            "prompt": prompt,
+            "url": url,
+            "thumbnail": thumbnail or url,
+            "updated_at": now,
+            "details": details
+        }
+
         try:
-            self.dynamodb.update_item(id, {
-                'status': status,
-                'updated_at': datetime.now().isoformat()
-            })
+            existing_item = self.dynamodb.get_item(id)
             
-            return self.get_media_metadata(id)
+            if existing_item:
+                updates = {
+                    'url': record['url'],
+                    'thumbnail': record['thumbnail'],
+                    'updated_at': now,
+                    'details': details
+                }
+                
+                self.dynamodb.update_item(id, updates)
+                record = self.dynamodb.get_item(id)
+            else:
+                record['created_at'] = now
+                self.dynamodb.put_item(record)
+
         except Exception as e:
-            raise Exception(f"Failed to update status: {str(e)}")
+            raise Exception(f"Failed to store metadata in DynamoDB: {str(e)}")
+
+        print('record', record)
+        return record
 
     def get_media_metadata(self, id: str) -> Dict[str, Any]:
         """

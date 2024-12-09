@@ -11,7 +11,6 @@ from services.bedrock_service import (
     gen_english,
     gen_mm_image_prompt,
     gen_image,
-    create_image_params
 )
 from session import SessionManager, MediaType
 
@@ -49,7 +48,7 @@ def _initialize_session_state():
 
 def _show_prompt_section():
     """Display the prompt input section"""
-    st.subheader("Generate a Prompt")
+    st.subheader("Generate a Image Prompt")
     prompt_type = st.selectbox(
         "Choose an option:",
         ["Basic Prompt", "Augmented Prompt"]
@@ -104,7 +103,7 @@ def _show_image_prompt_section():
 
 def _show_model_section():
     """Display the model configuration and generation section"""
-    st.subheader("Select a Model")
+    st.subheader("Select Image Model")
     model_type = st.selectbox(
         "Choose a model:",
         [BedrockModel.NOVA_CANVAS.value, BedrockModel.TITAN_IMAGE.value]
@@ -159,8 +158,8 @@ def _show_generated_images_section(session_manager: SessionManager):
     with st.status("Generating images...", expanded=True) as status:
         try:
             configs = st.session_state.generation_configs
-            img_params = create_image_params(
-                seed=configs['seed'],
+            img_params = ImageParams(seed=configs['seed'])
+            img_params.set_configuration(
                 count=configs['num_images'],
                 width=configs['size'].width,
                 height=configs['size'].height,

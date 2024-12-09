@@ -1,23 +1,12 @@
 import streamlit as st
 from datetime import datetime
-from enum import Enum
 from typing import Dict, Any, BinaryIO, Optional
 from genai_kit.aws.bedrock import BedrockModel
-from services.storage_service import StorageService
 from config import config
-
-
-class MediaType(Enum):
-    IMAGE = "IMAGE"
-    VIDEO = "VIDEO"
-  
-    @classmethod
-    def from_string(cls, string_value):
-        """Convert string value to corresponding enum member"""
-        for member in cls:
-            if member.value == string_value:
-                return member
-        return None
+from services.storage_service import StorageService
+from apps.bedrock_gallery.services.task_manager import AsyncTaskManager
+from apps.bedrock_gallery.utils import extract_key_from_uri
+from apps.bedrock_gallery.types import MediaType
 
 
 class SessionManager:
@@ -26,6 +15,7 @@ class SessionManager:
             bucket_name=config.S3_BUCKET,
             cloudfront_domain=config.CF_DOMAIN
         )
+        self.task_manager = AsyncTaskManager(self.storage_service)
 
     def add_to_history(
         self,
@@ -39,19 +29,23 @@ class SessionManager:
             st.session_state.request_history = []
         
         storage_metadata = None
-        if media_file and prompt:
-            try:
-                storage_metadata = self.storage_service.upload_image(
-                    media_type=media_type.value,
-                    model_type=model_type.value,
-                    prompt=prompt,
-                    details=details,
-                    status='Completed',
-                    image=media_file,
+        try:
+            storage_metadata = self.storage_service.upload_media(
+                media_type=media_type,
+                model_type=model_type,
+                prompt=prompt,
+                details=details,
+                image=media_file,
+            )
+
+            if media_type == MediaType.VIDEO:
+                self.task_manager.start_video_polling(
+                    task_id=storage_metadata['id'],
+                    invocation_arn=details['invocationArn']
                 )
-            except Exception as e:
-                st.error(f"Failed to upload media: {str(e)}")
-                return None
+        except Exception as e:
+            st.error(f"Failed to upload media: {str(e)}")
+            return None
 
         st.session_state.request_history.insert(0, storage_metadata)
         return storage_metadata

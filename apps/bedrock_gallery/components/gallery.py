@@ -53,12 +53,12 @@ def _display_media_item(item: Dict[str, Any], show_details: bool):
     container = st.container()
     
     media_type = item.get('media_type', '')
-    url = item.get('url', '')
+    thumbnail = item.get('thumbnail', None)
     
     if media_type == MediaType.IMAGE.value:
-        container.image(url)
-    elif media_type == MediaType.VIDEO.value:
-        container.video(url)
+        container.image(thumbnail)
+    elif media_type == MediaType.VIDEO.value and thumbnail:
+        container.video(thumbnail)
     
     container.caption(f"_{item.get('prompt', '')}_")
     

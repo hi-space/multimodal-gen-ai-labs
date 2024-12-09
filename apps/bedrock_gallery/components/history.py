@@ -1,13 +1,12 @@
 import streamlit as st
 import json
-from session import SessionManager, MediaType
-from utils import format_datetime
+from apps.bedrock_gallery.session import SessionManager, MediaType
+from apps.bedrock_gallery.utils import format_datetime
 
 
 def show_history(session_manager: SessionManager):
     st.title("📋 Request History")
 
-    # Filtering options
     with st.sidebar.expander("**히스토리 설정**", icon='⚙️', expanded=False):
         enum_values = [type.value for type in MediaType]
         filter_type = st.multiselect(
@@ -46,7 +45,6 @@ def _display_history_item(item):
         st.markdown("**요청 유형:**")
         st.markdown("**모델 타입:**")
         st.markdown("**프롬프트:**")
-        st.markdown("**상태:**")       
         st.markdown("**상세 정보:**")
     
     with col2:
@@ -54,10 +52,9 @@ def _display_history_item(item):
         st.text(item['media_type'])
         st.text(item['model_type'])
         st.code(item.get('prompt', ''), wrap_lines=True, language='txt')
-        st.text(item.get('status', 'UNKNOWN'))
         
-        url = item.get('url', '')
-        if url:
-            st.image(url)
+        thumbnail = item.get('thumbnail', None)
+        if thumbnail:
+            st.image(thumbnail)
                 
         st.json(json.loads(json.dumps(item['details'], default=float)))
