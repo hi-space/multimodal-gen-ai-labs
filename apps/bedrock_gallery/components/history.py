@@ -3,10 +3,8 @@ import json
 from session import SessionManager, MediaType
 from utils import format_datetime
 
-session_manager = SessionManager()
 
-
-def show_history():
+def show_history(session_manager: SessionManager):
     st.title("📋 Request History")
 
     # Filtering options
@@ -24,9 +22,6 @@ def show_history():
             session_manager.clear_history()
             st.rerun()
     
-    _display_history_items(filter_type)
-
-def _display_history_items(filter_type):
     history = session_manager.get_history()
 
     if history:
@@ -42,12 +37,14 @@ def _display_history_items(filter_type):
     else:
         st.info("아직 요청 기록이 없습니다.")
 
+
 def _display_history_item(item):
     col1, col2 = st.columns([1, 3])
     
     with col1:
         st.markdown("**요청 시간:**")
         st.markdown("**요청 유형:**")
+        st.markdown("**모델 타입:**")
         st.markdown("**프롬프트:**")
         st.markdown("**상태:**")       
         st.markdown("**상세 정보:**")
@@ -55,7 +52,8 @@ def _display_history_item(item):
     with col2:
         st.text(format_datetime(item['created_at'], seconds=True))
         st.text(item['media_type'])
-        st.text(item.get('prompt', ''))
+        st.text(item['model_type'])
+        st.code(item.get('prompt', ''), wrap_lines=True)
         st.text(item.get('status', 'UNKNOWN'))
         
         url = item.get('url', '')

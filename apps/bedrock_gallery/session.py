@@ -8,8 +8,8 @@ from config import config
 
 
 class MediaType(Enum):
-    IMAGE_GEN = "IMAGE_GENERATION"
-    VIDEO_GEN = "VIDEO_GENERATION"
+    IMAGE = "IMAGE"
+    VIDEO = "VIDEO"
   
     @classmethod
     def from_string(cls, string_value):

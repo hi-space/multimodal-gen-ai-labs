@@ -31,6 +31,19 @@ class CdkStack(Stack):
             block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
         )
 
+        # CloudFront Distribution 생성 (OAC 설정 포함)
+        distribution = cloudfront.Distribution(
+            self,
+            generate_name("cf"),
+            default_behavior=cloudfront.BehaviorOptions(
+                origin=origins.S3Origin(
+                    bucket,
+                    origin_access_identity=None  # OAI를 사용하지 않도록 설정
+                ),
+                viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+            ),
+        )
+
         # CloudFront OAC 생성
         oac = cloudfront.CfnOriginAccessControl(
             self,
@@ -38,30 +51,29 @@ class CdkStack(Stack):
             origin_access_control_config=cloudfront.CfnOriginAccessControl.OriginAccessControlConfigProperty(
                 name=generate_name("oac-config"),
                 origin_access_control_origin_type="s3",
-                signing_behavior="always",  # S3 요청에 서명 추가
-                signing_protocol="sigv4"    # AWS SigV4 프로토콜 사용
+                signing_behavior="always",
+                signing_protocol="sigv4"
             )
         )
 
-        # CloudFront 배포 생성
-        distribution = cloudfront.Distribution(
-            self,
-            generate_name("cf"),
-            default_behavior=cloudfront.BehaviorOptions(
-                origin=origins.S3BucketOrigin(
-                    bucket,
-                    origin_access_control_id=oac.attr_id,  # OAC 연결
-                ),
-                viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
-            ),
+        # OAC를 Distribution의 S3 Origin에 연결
+        cfn_distribution = distribution.node.default_child
+        cfn_distribution.add_property_override(
+            "DistributionConfig.Origins.0.OriginAccessControlId",
+            oac.attr_id
+        )
+        # S3 Origin의 CustomOriginConfig 제거
+        cfn_distribution.add_property_override(
+            "DistributionConfig.Origins.0.CustomOriginConfig",
+            None
         )
        
-        # S3 버킷 정책 추가 (OAC 사용 시 명시적 정책 필요)
+        # S3 버킷 정책 추가
         bucket.add_to_resource_policy(
             iam.PolicyStatement(
                 actions=["s3:GetObject"],
-                resources=[bucket.arn_for_objects("*")],  # 버킷 내 모든 객체 ARN
-                principals=[iam.ServicePrincipal("cloudfront.amazonaws.com")],  # CloudFront만 허용
+                resources=[bucket.arn_for_objects("*")],
+                principals=[iam.ServicePrincipal("cloudfront.amazonaws.com")],
                 conditions={
                     "StringEquals": {
                         "AWS:SourceArn": f"arn:aws:cloudfront::{self.account}:distribution/{distribution.distribution_id}"

@@ -196,7 +196,7 @@ def _show_generated_images_section():
             
             # Add to history
             session_manager.add_to_history(
-                media_type = MediaType.IMAGE_GEN,
+                media_type = MediaType.IMAGE,
                 prompt = st.session_state.image_prompt,
                 model_type = model_type,
                 media_file=image_data,

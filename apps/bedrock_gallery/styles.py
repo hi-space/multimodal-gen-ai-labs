@@ -29,5 +29,13 @@ def load_styles():
                 margin-bottom: 1rem;
                 box-shadow: 0 1px 3px rgba(0,0,0,0.12);
             }
+                
+            /* Code 블록 스타일링 */
+            div[data-testid="stCode"] > pre {
+                background-color: white !important;
+                padding: 1rem !important;
+                margin: 0 !important;
+                border-radius: 1rem;
+            }
         </style>
     """, unsafe_allow_html=True)

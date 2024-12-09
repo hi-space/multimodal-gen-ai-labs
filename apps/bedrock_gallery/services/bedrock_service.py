@@ -15,8 +15,9 @@ def gen_english(request: str,
                 top_k: Optional[int] = None):
     prompt = PromptTemplate(
                 template="""You are an Assistant for translation.
-                Always change the contents in <request> to English without any explanation and tag.
-                
+                Always change the contents in <request> to English without any additional descriptions or tags.
+                If there is no <request>, please suggest a new keyword to generate images  without any additional descriptions or tags.
+                                
                 <request>
                 {request}
                 </request>
@@ -40,6 +41,7 @@ def gen_mm_image_prompt(keyword: str,
                 template=""""You are an Assistant that generates prompt for generate image by image generator model.
                 The image that Human wants is written in <keyword>.
                 - Write a images creation prompt keeping it to 400 characters or less.
+                - If there is no <keyword>, please feel free to suggest it using your imagination.
                 - If an image is given, generate a prompt that represents the keyword while maintaining the style of the given image.
                 - The prompts should be clear and concise, and should be able to generate a variety of images that are relevant to the keyword.
                 
