@@ -16,18 +16,16 @@ Amazon Bedrock의 생성형 AI 모델 Nova를 활용하여 이미지와 비디�
 
 ### 1. 이미지 생성기 - `Nova Canvas`, `Titan Imag Generator v2`
 
-![image-gen-1](./assets/image-gen-1.png)
-![image-gen-2](./assets/image-gen-2.png)
-
 - LLM 기반 프롬프트 개선 (텍스트, 이미지)
   - `Basic Prompt`: 입력한 prompt를 영문으로 변경
   - `Augmented Prompt`: 입력한 prompt와 이미지를 기반으로 프롬프트 작성
 - 실시간 이미지 생성 및 미리보기
 - Nova Canvas와 Titan 모델 선택 가능
 
-### 2. 비디오 생성기 - `Nova Reel`
+![image-gen-1](./assets/image-gen-1.png)
+![image-gen-2](./assets/image-gen-2.png)
 
-![video-gen](./assets/video-gen.png)
+### 2. 비디오 생성기 - `Nova Reel`
 
 - LLM 기반 프롬프트 개선 (텍스트, 이미지)
   - `Basic Prompt`: 입력한 prompt를 영문으로 변경
@@ -38,19 +36,21 @@ Amazon Bedrock의 생성형 AI 모델 Nova를 활용하여 이미지와 비디�
 - 비동기 생성 프로세스
 - 고정 해상도(1280x720) 및 길이(6초) 지원
 
-### 3. 갤러리
+![video-gen](./assets/video-gen.png)
 
-![gallery](./assets/gallery.png)
+### 3. 갤러리
 
 - 생성된 모든 이미지와 비디오 전시
 - CloudFront를 통한 최적화된 미디어 전송
 
-### 4. 히스토리
+![gallery](./assets/gallery.png)
 
-![history](./assets/history.png)
+### 4. 히스토리
 
 - 생성 요청 기록 조회
 - 상세 옵션 및 결과물 확인
+
+![history](./assets/history.png)
 
 ## 🚀 How to Run
 
