@@ -1,3 +1,4 @@
+from apps.bedrock_gallery.constants import VIDEO_OUTPUT_FILE
 import boto3
 from io import BytesIO
 from typing import Dict, Any, BinaryIO, List, Optional
@@ -127,8 +128,7 @@ class StorageService:
             "media_type": MediaType.VIDEO.value,
             "model_type": model_type,
             "prompt": prompt,
-            "url": f"{self.cloudfront_domain}/{id}/output.mp4",
-            "thumbnail": f"{self.cloudfront_domain}/{id}/thumbnail.png",
+            "url": f"{self.cloudfront_domain}/{id}/{VIDEO_OUTPUT_FILE}",
             "updated_at": now,
             "details": details
         }
@@ -223,7 +223,7 @@ class StorageService:
         try:
             video_bytes = self.s3_client.get_object(
                 Bucket=config.S3_BUCKET,
-                Key = f"{job_id}/output.mp4"
+                Key = f"{job_id}/{VIDEO_OUTPUT_FILE}"
             )['Body'].read()
             thumbnail_bytes = get_thumbnail(video_bytes)
 

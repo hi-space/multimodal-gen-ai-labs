@@ -1,3 +1,4 @@
+from apps.bedrock_gallery.constants import VIDEO_OUTPUT_FILE
 import boto3
 import json
 import secrets
@@ -90,7 +91,7 @@ class BedrockAmazonVideo():
         )
         status = invocation.get("status", "")
         s3Uri = invocation.get("outputDataConfig", {}).get("s3OutputDataConfig", {}).get("s3Uri", "")
-        return VideoStatus(status), s3Uri
+        return VideoStatus(status), s3Uri, invocation
     
     def list_jobs(self, status: VideoStatus = None, max_results: int = None):
         params = {}
@@ -124,4 +125,4 @@ class BedrockAmazonVideo():
         
         s3 = S3(bucket_name=self.bucket_name)
         key = s3.extract_key_from_uri(s3Uri)
-        return s3.get_object(f"{key}/output.mp4")
+        return s3.get_object(f"{key}/{VIDEO_OUTPUT_FILE}")

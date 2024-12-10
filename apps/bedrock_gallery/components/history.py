@@ -1,40 +1,22 @@
 import streamlit as st
 import json
+from typing import List
 from apps.bedrock_gallery.session import SessionManager, MediaType
 from apps.bedrock_gallery.utils import format_datetime
 
 
-def show_history(session_manager: SessionManager):
+def show_history(media_items: List[dict] = [], show_details: bool = False):
     st.title("📋 Request History")
 
-    with st.sidebar.expander("**히스토리 설정**", icon='⚙️', expanded=False):
-        enum_values = [type.value for type in MediaType]
-        filter_type = st.multiselect(
-            "요청 유형 필터",
-            options=enum_values,
-            default=enum_values,
-        )
-        
-    history = session_manager.get_history()
+    for item in media_items:
+        icon = _get_emoji(item['media_type'])
+        with st.expander(
+            f"**{item['media_type']}** - {format_datetime(item['created_at'])}",
+            expanded=show_details,
+            icon=icon,
+        ):
+            _display_history_item(item)
 
-    if history:
-        filtered_history = [item for item in history 
-                          if item['media_type'] in filter_type]
-        
-        filtered_history = sorted(
-            filtered_history,
-            key=lambda x: x.get('created_at', ''),
-            reverse=True
-        )
-        
-        for item in filtered_history:
-            icon = _get_emoji(item['media_type'])
-            with st.expander(
-                f"**{item['media_type']}** - {format_datetime(item['created_at'])}",
-                expanded=False,
-                icon=icon,
-            ):
-                _display_history_item(item)
     else:
         st.info("아직 요청 기록이 없습니다.")
 
@@ -54,7 +36,6 @@ def _display_history_item(item):
         st.markdown("**요청 유형:**")
         st.markdown("**모델 타입:**")
         st.markdown("**프롬프트:**")
-        st.markdown("**상세 정보:**")
     
     with col2:
         media_type = item['media_type']

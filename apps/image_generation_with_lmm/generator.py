@@ -4,6 +4,8 @@ import json
 
 from typing import List, Optional
 from genai_kit.aws.claude import BedrockClaude
+from genai_kit.aws.amazon_image import BedrockAmazonImage
+from genai_kit.aws.amazon_video import BedrockAmazonVideo
 from prompt import (
     get_llm_image_prompt,
     get_mm_llm_image_prompt,

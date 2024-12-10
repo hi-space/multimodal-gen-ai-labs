@@ -5,36 +5,11 @@ from session import SessionManager, MediaType
 from utils import format_datetime
 
 
-def show_gallery(session_manager: SessionManager):
+def show_gallery(media_items: List[dict] = [], cols_per_row: int = 3, show_details: bool = False):
     st.title("🖼️ GenAI Gallery")
-    
-    with st.sidebar.expander("**갤러리 설정**", icon='⚙️', expanded=False):
-        # Media type filter
-        media_types = [type.value for type in MediaType]
-        selected_types = st.multiselect(
-            "미디어 타입",
-            options=media_types,
-            default=media_types,
-        )
-        
-        # Layout settings
-        cols_per_row = st.slider("열 수 설정", min_value=1, max_value=5, value=3)
-        
-        # Detail view toggle
-        show_details = st.checkbox("상세 정보 표시", value=False)
-        
-    media_items = session_manager.get_history()
-    if media_items:
-        filtered_media_items = [item for item in media_items 
-                            if item['media_type'] in selected_types]
-        
-        filtered_media_items = sorted(
-            filtered_media_items,
-            key=lambda x: x.get('created_at', ''),
-            reverse=True
-        )
 
-        _display_media_grid(filtered_media_items, cols_per_row, show_details)
+    if media_items and len(media_items) > 0:
+        _display_media_grid(media_items, cols_per_row, show_details)
     else:
         st.info("표시할 미디어가 없습니다.")
 
