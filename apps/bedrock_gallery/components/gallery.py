@@ -35,14 +35,13 @@ def _display_media_item(item: Dict[str, Any], show_details: bool):
     elif url and media_type == MediaType.VIDEO.value:
         container.video(url)
     
-    container.caption(f"_{item.get('prompt', '')}_")
-    
     if show_details:
         with container.expander(format_datetime(item.get('created_at', ''), seconds=False), expanded=False):
             st.code(item.get('prompt', ''), wrap_lines=True, language='txt')
-            
-            st.markdown("**모델:**")
-            st.text(item.get('model_type', ''))
+            st.markdown(f"**ID:** {item.get('id', '')}")
+            st.markdown(f"**모델:** {item.get('model_type', '')}")
             if details := item.get('details'):
                 st.markdown("**상세 정보:**")
                 st.json(json.loads(json.dumps(details, default=float)), expanded=False)
+    else:
+        container.caption(f"_{item.get('prompt', '')}_")

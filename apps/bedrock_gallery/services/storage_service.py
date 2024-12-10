@@ -8,7 +8,6 @@ from config import config
 from genai_kit.aws.bedrock import BedrockModel
 from genai_kit.aws.dynamodb import DynamoDB
 from genai_kit.utils.random import random_id
-from genai_kit.utils.images import get_thumbnail
 from apps.bedrock_gallery.utils import extract_key_from_uri
 from apps.bedrock_gallery.types import MediaType
 
@@ -40,14 +39,16 @@ class StorageService:
         model_type: BedrockModel,
         prompt: str,
         details: Optional[Dict[str, Any]] = None,
-        image: Optional[BinaryIO] = None,
+        media_file: Optional[BinaryIO] = None,
+        ref_image: Optional[str] = None,
     ):
         if media_type == MediaType.IMAGE:
             return self.upload_image(
                 model_type=model_type.value,
                 prompt=prompt,
                 details=details,
-                image=image,
+                media_file=media_file,
+                ref_image=ref_image,
             )
         elif media_type == MediaType.VIDEO:
             s3Uri = details.get("outputDataConfig", {}).get("s3OutputDataConfig", {}).get("s3Uri", "")
@@ -56,7 +57,7 @@ class StorageService:
                 model_type=model_type.value,
                 prompt=prompt,
                 details=details,
-                image=image,
+                ref_image=ref_image,
                 id=id,
             )    
 
@@ -65,16 +66,16 @@ class StorageService:
         model_type: str,
         prompt: str,
         details: Dict[str, Any],
-        image: Optional[BinaryIO] = None,
-        thumbnail: Optional[str] = None,
+        media_file: Optional[BinaryIO] = None,
+        ref_image: Optional[str] = None,
         id: Optional[str] = None,
     ) -> Dict[str, Any]:
         image_id = id or random_id()
         now = datetime.now().isoformat()
         url = None
 
-        if image:
-            url = self.upload_to_s3(image, image_id)
+        if media_file:
+            url = self.upload_to_s3(media_file, image_id)
 
         url = url or f"{self.cloudfront_domain}/{image_id}"
         record = {
@@ -82,8 +83,8 @@ class StorageService:
             "media_type": MediaType.IMAGE.value,
             "model_type": model_type,
             "prompt": prompt,
+            "ref_image": ref_image,
             "url": url,
-            "thumbnail": thumbnail or url,
             "updated_at": now,
             "details": details
         }
@@ -95,7 +96,6 @@ class StorageService:
                 updates = {
                     'model_type': model_type,
                     'url': record['url'],
-                    'thumbnail': record['thumbnail'],
                     'updated_at': now,
                     'details': details
                 }
@@ -116,8 +116,7 @@ class StorageService:
         model_type: Optional[str] = None,
         prompt: Optional[str] = None,
         details: Optional[Dict[str, Any]] = None,
-        image: Optional[BinaryIO] = None,
-        thumbnail: Optional[str] = None,
+        ref_image: Optional[str] = None,
         id: Optional[str] = None,
     ) -> Dict[str, Any]:
         id = id or random_id()
@@ -128,6 +127,7 @@ class StorageService:
             "media_type": MediaType.VIDEO.value,
             "model_type": model_type,
             "prompt": prompt,
+            "ref_image": ref_image,
             "url": f"{self.cloudfront_domain}/{id}/{VIDEO_OUTPUT_FILE}",
             "updated_at": now,
             "details": details
@@ -139,7 +139,6 @@ class StorageService:
             if existing_item:
                 updates = {
                     'url': record['url'],
-                    'thumbnail': record['thumbnail'],
                     'updated_at': now,
                     'details': details
                 }
@@ -207,30 +206,10 @@ class StorageService:
                 
                 job_status = job.get('status')
                 if media_map[job_id].get('details', {}).get('status', '') != job_status:
-                    if job_status == 'Completed':
-                        thumbnail = self._save_thumbnail(job_id)
-
-                        self.update_video_status(
-                            details=job,
-                            thumbnail=thumbnail,
-                            id=job_id
-                        )
+                    self.update_video_status(
+                        details=job,
+                        id=job_id
+                    )
 
         except Exception as e:
             raise Exception(f"Failed to sync video jobs: {str(e)}")
-        
-    def _save_thumbnail(self, job_id) -> str:
-        try:
-            video_bytes = self.s3_client.get_object(
-                Bucket=config.S3_BUCKET,
-                Key = f"{job_id}/{VIDEO_OUTPUT_FILE}"
-            )['Body'].read()
-            thumbnail_bytes = get_thumbnail(video_bytes)
-
-            return self.upload_to_s3(
-                image=BytesIO(thumbnail_bytes),
-                image_id=f"{job_id}/thumbnail",
-            )
-        except Exception as e:
-            raise Exception(f"Failed to save thumbnail: {str(e)}")
-        

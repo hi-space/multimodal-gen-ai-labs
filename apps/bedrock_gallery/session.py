@@ -23,6 +23,7 @@ class SessionManager:
         model_type: BedrockModel, 
         details: Optional[Dict[str, Any]] = None,
         media_file: Optional[BinaryIO] = None,
+        ref_image: Optional[str] = None,
     ):
         if 'request_history' not in st.session_state:
             st.session_state.request_history = []
@@ -34,7 +35,8 @@ class SessionManager:
                 model_type=model_type,
                 prompt=prompt,
                 details=details,
-                image=media_file,
+                media_file=media_file,
+                ref_image=ref_image,
             )
         except Exception as e:
             st.error(f"Failed to upload media: {str(e)}")

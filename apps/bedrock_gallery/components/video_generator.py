@@ -32,7 +32,7 @@ def show_video_generator(session_manager: SessionManager):
         generate_clicked = _show_video_model_section()
     
     if generate_clicked:
-        _show_video_generation_section(session_manager)
+        generate_video(session_manager)
 
 def _initialize_video_session_state():
     """Initialize video-specific session state variables"""
@@ -131,10 +131,10 @@ def _get_video_model_configurations():
     duration = st.slider("Duration", 1, 30, 6, 1, key="video_duration_slider", disabled=True)
     fps = st.number_input("FPS", 24, key="video_fps_input", disabled=True)
     seed = st.number_input("Seed", 0, 2147483646, 0, key="video_seed_input")
-        
     dimension_options = {
         "1280x720"
     }
+
     selected_resolution = st.selectbox("Video Resolution", 
                                      options=list(dimension_options),
                                      key="video_resolution_select")
@@ -146,7 +146,7 @@ def _get_video_model_configurations():
         'seed': seed,
     }
 
-def _show_video_generation_section(session_manager: SessionManager):
+def generate_video(session_manager: SessionManager):
     """Display the generated videos section"""
     st.divider()
     st.subheader("Generated Videos")
@@ -171,6 +171,7 @@ def _show_video_generation_section(session_manager: SessionManager):
                     prompt=st.session_state.video_generation_prompt,
                     model_type=BedrockModel(st.session_state.video_model_type),
                     details=invocation,
+                    ref_image=st.session_state.video_generation_image,
                 )
             
                 status.update(label="비디오 생성이 시작되었습니다. 작업은 약 5분 소요됩니다.", state="complete")

@@ -1,6 +1,7 @@
 import streamlit as st
 import json
 from typing import List
+from genai_kit.utils.images import base64_to_image
 from apps.bedrock_gallery.session import SessionManager, MediaType
 from apps.bedrock_gallery.utils import format_datetime
 
@@ -43,7 +44,14 @@ def _display_history_item(item):
         st.text(format_datetime(item['created_at'], seconds=True))
         st.text(media_type)
         st.text(item['model_type'])
+
+        ref_image = item.get('ref_image', None)
+        if ref_image:            
+            st.image(base64_to_image(ref_image))
+
         st.code(item.get('prompt', ''), wrap_lines=True, language='txt')
+
+        st.divider()
         
         url = item.get('url', '')
         if url and media_type == MediaType.IMAGE.value:
