@@ -1,4 +1,6 @@
+import io
 import os
+import av
 import base64
 import requests
 import tempfile
@@ -65,9 +67,11 @@ def display_video(video_bytes: bytes, width=800):
     except:
         pass
 
+def base64_to_bytes(base64str: str):
+    return BytesIO(base64.decodebytes(bytes(base64str, "utf-8")))
 
 def base64_to_image(base64str: str):
-    return Image.open(BytesIO(base64.decodebytes(bytes(base64str, "utf-8"))))
+    return Image.open(base64_to_bytes(base64str))
 
 def save_base64_image(base64str: str, path: str):
     os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -191,3 +195,23 @@ def resize_image(img: Image, width=1280, height=720):
     
     # 크롭된 이미지 반환
     return img.crop((left, top, right, bottom))
+
+def get_thumbnail(video_bytes: str, timestamp: int = 0):
+    video_buffer = io.BytesIO(video_bytes)
+    container = av.open(video_buffer)
+    stream = container.streams.video[0]
+
+    fps = stream.average_rate
+    target_frame = int(timestamp * float(fps))
+
+    container.seek(target_frame, stream=stream)
+
+    for frame in container.decode(video=0):
+        img = frame.to_image()
+
+        img_byte_arr = io.BytesIO()
+        img.save(img_byte_arr, format='JPEG', quality=90)
+        img_byte_arr.seek(0)
+        return img_byte_arr.getvalue()
+
+    return None

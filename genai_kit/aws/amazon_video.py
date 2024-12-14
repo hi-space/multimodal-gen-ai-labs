@@ -1,3 +1,4 @@
+from apps.bedrock_gallery.constants import VIDEO_OUTPUT_FILE
 import boto3
 import json
 import secrets
@@ -36,7 +37,10 @@ class BedrockAmazonVideo():
         self,
         text: str,
         image: Optional[str] = None,
-        seed: Optional[int] = None
+        seed: Optional[int] = None,
+        durationSeconds: int = 6,
+        fps: int = 24,
+        dimension: str = '1280x720',
     ) -> str:
         """
         Generate a video from text with an optional input image and seed.
@@ -55,9 +59,9 @@ class BedrockAmazonVideo():
                 "text": text
             },
             "videoGenerationConfig": {
-                "durationSeconds": 6,
-                "fps": 24,
-                "dimension": "1280x720",
+                "durationSeconds": durationSeconds,
+                "fps": fps,
+                "dimension": dimension,
                 "seed": seed if seed is not None else secrets.randbelow(2147483647)
             }
         }
@@ -87,7 +91,7 @@ class BedrockAmazonVideo():
         )
         status = invocation.get("status", "")
         s3Uri = invocation.get("outputDataConfig", {}).get("s3OutputDataConfig", {}).get("s3Uri", "")
-        return VideoStatus(status), s3Uri
+        return VideoStatus(status), s3Uri, invocation
     
     def list_jobs(self, status: VideoStatus = None, max_results: int = None):
         params = {}
@@ -119,6 +123,6 @@ class BedrockAmazonVideo():
             if not s3Uri:
                 raise ValueError(f"No S3 URI found for invocation ARN: {invocation_arn}")
         
-        s3 = S3(bucket_name=self.bucket_name, region=self.region)
+        s3 = S3(bucket_name=self.bucket_name)
         key = s3.extract_key_from_uri(s3Uri)
-        return s3.get_object(f"{key}/output.mp4")
+        return s3.get_object(f"{key}/{VIDEO_OUTPUT_FILE}")

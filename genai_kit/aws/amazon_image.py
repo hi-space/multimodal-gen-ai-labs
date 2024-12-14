@@ -31,7 +31,7 @@ class BedrockAmazonImage():
         return response_body.get("images")
     
 
-class ImageSize(Enum):
+class TitanImageSize(Enum):
     SIZE_512x512 = (512, 512)       # 1:1
     SIZE_1024x1024 = (1024, 1024)   # 1:1
     SIZE_768x768 = (768, 768)       # 1:1
@@ -63,24 +63,60 @@ class ImageSize(Enum):
         self.height = height
 
 
+class NovaImageSize(Enum):
+    SIZE_512x512 = (512, 512)       # 1:1
+    SIZE_1024x1024 = (1024, 1024)   # 1:1
+    SIZE_2048x2048 = (2048, 2048)   # 1:1
+    SIZE_336x1024 = (336, 1024)     # 1:3
+    SIZE_512x1024 = (512, 1024)     # 1:2
+    SIZE_512x2048 = (512, 2048)     # 1:4
+    SIZE_576x1024 = (576, 1024)     # 9:16
+    SIZE_672x1024 = (672, 1024)     # 2:3
+    SIZE_720x1280 = (720, 1280)     # 9:16
+    SIZE_816x1024 = (816, 1024)     # 4:5
+    SIZE_1024x4096 = (1024, 4096)   # 1:4
+    SIZE_1168x3536 = (1168, 3536)   # 1:3
+    SIZE_1440x2896 = (1440, 2896)   # 1:2
+    SIZE_1520x2720 = (1520, 2720)   # 9:16
+    SIZE_1664x2512 = (1664, 2512)   # 2:3
+    SIZE_1824x2288 = (1824, 2288)   # 4:5
+    SIZE_1024x336 = (1024, 336)     # 3:1
+    SIZE_1024x512 = (1024, 512)     # 2:1
+    SIZE_1024x576 = (1024, 576)     # 16:9
+    SIZE_1024x627 = (1024, 627)     # 3:2
+    SIZE_1024x816 = (1024, 816)     # 5:4
+    SIZE_1280x720 = (1280, 720)     # 16:9
+    SIZE_2048x512 = (2048, 512)     # 4:1
+    SIZE_2288x1824 = (2288, 1824)   # 5:4
+    SIZE_2512x1664 = (2512, 1664)   # 3:2
+    SIZE_2720x1520 = (2720, 1520)   # 16:9
+    SIZE_2896x1440 = (2896, 1440)   # 2:1
+    SIZE_3536x1168 = (3536, 1168)   # 3:1
+    SIZE_4096x1024 = (4096, 1024)   # 4:1
+
+    def __init__(self, width, height):
+        self.width = width
+        self.height = height
+
+
 class ControlMode(Enum):
     CANNY_EDGE = "CANNY_EDGE"
     SEGMENTATION = "SEGMENTATION"
 
 
 class ImageParams:
-    def __init__(self, count: int = 1, size: ImageSize = ImageSize.SIZE_1280x768, cfg: float = 8.0, seed: Optional[int] = None):
-        self._config = self._default_configuration(count=count, size=size, cfg=cfg, seed=seed)
+    def __init__(self, count: int = 1, width: int = 512, height: int = 512, cfg: float = 8.0, seed: Optional[int] = None):
+        self._config = self._default_configuration(count=count, width=width, height=height, cfg=cfg, seed=seed)
 
     '''
     Image Configuration
     '''
-    def _default_configuration(self, count: int = 1, size: ImageSize = ImageSize.SIZE_512x512, cfg: float = 8.0, seed: Optional[int] = None) -> dict:
+    def _default_configuration(self, count: int = 1, width: int = 512, height: int = 512, cfg: float = 8.0, seed: Optional[int] = None) -> dict:
         return {
             "imageGenerationConfig": {
                 "numberOfImages": count,  # [1, 5]
-                "width": size.width,
-                "height": size.height,
+                "width": width,
+                "height": height,
                 "cfgScale": cfg,  # [1.0, 10.0]
                 "seed": seed if seed is not None else secrets.randbelow(2147483647)
             }
@@ -89,8 +125,8 @@ class ImageParams:
     def get_configuration(self):
         return self._config
 
-    def set_configuration(self, count: int = 1, size: ImageSize = ImageSize.SIZE_512x512, cfg: float = 8.0):
-        self._config = self._default_configuration(count, size, cfg)
+    def set_configuration(self, count: int = 1, width: int = 512, height: int = 512, cfg: float = 8.0):
+        self._config = self._default_configuration(count, width, height, cfg)
 
     def _prepare_body(self, task_type: str, params: dict) -> str:
         body = {
