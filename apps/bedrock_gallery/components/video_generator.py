@@ -1,41 +1,36 @@
-import os
-import sys
-sys.path.append(os.path.abspath("../../"))
-
 import streamlit as st
-from typing import List
+from PIL import Image
 from genai_kit.aws.bedrock import BedrockModel
-from genai_kit.utils.images import base64_to_image, encode_image_base64, base64_to_bytes, resize_image
+from genai_kit.utils.images import encode_image_base64, resize_image
 from services.bedrock_service import (
     gen_english,
     gen_mm_video_prompt,
     gen_video,
     get_video_job,
 )
-from session import SessionManager, MediaType
-from PIL import Image
+from session import SessionManager
+from enums import MediaType
 
 
 def show_video_generator(session_manager: SessionManager):
     st.title("🎥 Video Generator")
-    _initialize_video_session_state()
+    initialize_video_session_state()
     
     vcol1, vcol2, vcol3 = st.columns(3)
     
     with vcol1:
-        _show_video_prompt_input_section()
+        show_video_prompt_input_section()
     
     with vcol2:
-        _show_video_prompt_edit_section()
+        show_video_prompt_edit_section()
     
     with vcol3:
-        generate_clicked = _show_video_model_section()
-    
-    if generate_clicked:
-        _show_video_generation_section(session_manager)
+        generate_clicked = show_video_model_section()
 
-def _initialize_video_session_state():
-    """Initialize video-specific session state variables"""
+    if generate_clicked:
+        generate_video(session_manager)
+
+def initialize_video_session_state():
     if 'video_generation_prompt' not in st.session_state:
         st.session_state.video_generation_prompt = ""
     if 'video_generation_image' not in st.session_state:
@@ -45,12 +40,11 @@ def _initialize_video_session_state():
     if 'video_generation_configs' not in st.session_state:
         st.session_state.video_generation_configs = None
 
-def _show_video_prompt_input_section():
-    """Display the video prompt input section"""
+def show_video_prompt_input_section():
     st.subheader("Generate a Video Prompt")
     video_prompt_type = st.selectbox(
         "Choose an option:",
-        ["Augmented Video Prompt", "Basic Video Prompt"],
+        ["Basic Video Prompt", "Augmented Video Prompt"],
         key="video_prompt_type_select"
     )
 
@@ -96,8 +90,7 @@ def _show_video_prompt_input_section():
                     top_k=top_k
                 )
 
-def _show_video_prompt_edit_section():
-    """Display the generated video prompt section"""
+def show_video_prompt_edit_section():
     st.subheader("Video Prompt")
     prompt_value = st.text_area(
         label="Edit or modify the prompt",
@@ -109,8 +102,7 @@ def _show_video_prompt_edit_section():
     if prompt_value != st.session_state.video_generation_prompt:
         st.session_state.video_generation_prompt = prompt_value
 
-def _show_video_model_section():
-    """Display the video model configuration and generation section"""
+def show_video_model_section():
     st.subheader("Select Video Model")
     model_type = st.selectbox(
         "Choose a model:",
@@ -126,28 +118,7 @@ def _show_video_model_section():
     
     return st.button("Generate Videos", icon='🎥', type="primary", use_container_width=True, key="video_generate_btn")
 
-def _get_video_model_configurations():
-    """Get video model configurations from user input"""
-    duration = st.slider("Duration", 1, 30, 6, 1, key="video_duration_slider", disabled=True)
-    fps = st.number_input("FPS", 24, key="video_fps_input", disabled=True)
-    seed = st.number_input("Seed", 0, 2147483646, 0, key="video_seed_input")
-        
-    dimension_options = {
-        "1280x720"
-    }
-    selected_resolution = st.selectbox("Video Resolution", 
-                                     options=list(dimension_options),
-                                     key="video_resolution_select")
-    
-    return {
-        'durationSeconds': duration,
-        'fps': fps,
-        'dimension': selected_resolution,
-        'seed': seed,
-    }
-
-def _show_video_generation_section(session_manager: SessionManager):
-    """Display the generated videos section"""
+def generate_video(session_manager: SessionManager):
     st.divider()
     st.subheader("Generated Videos")
     
@@ -171,6 +142,7 @@ def _show_video_generation_section(session_manager: SessionManager):
                     prompt=st.session_state.video_generation_prompt,
                     model_type=BedrockModel(st.session_state.video_model_type),
                     details=invocation,
+                    ref_image=st.session_state.video_generation_image,
                 )
             
                 status.update(label="비디오 생성이 시작되었습니다. 작업은 약 5분 소요됩니다.", state="complete")
@@ -179,3 +151,21 @@ def _show_video_generation_section(session_manager: SessionManager):
             status.update(label=f"Error: {str(e)}", state="error")
             st.error(f"비디오 생성 중 오류가 발생했습니다: {str(e)}")
         
+def _get_video_model_configurations():
+    duration = st.slider("Duration", 1, 30, 6, 1, key="video_duration_slider", disabled=True)
+    fps = st.number_input("FPS", 24, key="video_fps_input", disabled=True)
+    seed = st.number_input("Seed", 0, 2147483646, 0, key="video_seed_input")
+    dimension_options = {
+        "1280x720"
+    }
+
+    selected_resolution = st.selectbox("Video Resolution", 
+                                     options=list(dimension_options),
+                                     key="video_resolution_select")
+    
+    return {
+        'durationSeconds': duration,
+        'fps': fps,
+        'dimension': selected_resolution,
+        'seed': seed,
+    }

@@ -12,4 +12,4 @@ def format_datetime(time_str: str, seconds=False) -> str:
 
 def extract_key_from_uri(s3_uri):
     parsed_uri = urlparse(s3_uri)
-    return parsed_uri.path.lstrip('/')
+    return parsed_uri.path.split('/')[-1]

@@ -1,42 +1,42 @@
-import os
-import sys
-sys.path.append(os.path.abspath("../../"))
-
 import streamlit as st
 from typing import List
 from genai_kit.aws.amazon_image import ImageParams, TitanImageSize, NovaImageSize
+from genai_kit.aws.sd_image import SDImageSize
 from genai_kit.aws.bedrock import BedrockModel
 from genai_kit.utils.images import encode_image_base64, base64_to_bytes
 from services.bedrock_service import (
     gen_english,
     gen_mm_image_prompt,
     gen_image,
+    is_sd_model,
 )
-from session import SessionManager, MediaType
+from session import SessionManager
+from enums import MediaType
 
 
 def show_image_generator(session_manager: SessionManager):
     st.title("🎨 Image Generator")
-    _initialize_session_state()
+    initialize_session_state()
     
     col1, col2, col3 = st.columns(3)
     
     with col1:
-        _show_prompt_section()
+        show_prompt_section()
     
     with col2:
-        _show_image_prompt_section()
+        show_image_prompt_section()
     
     with col3:
-        generate_clicked = _show_model_section()
-    
-    if generate_clicked:
-        _show_generated_images_section(session_manager)
+        generate_clicked = show_model_section()
 
-def _initialize_session_state():
-    """Initialize session state variables"""
+    if generate_clicked:
+        generate_image(session_manager)
+
+def initialize_session_state():
     if 'image_prompt' not in st.session_state:
         st.session_state.image_prompt = ""
+    if 'ref_image' not in st.session_state:
+        st.session_state.ref_image = None
     if 'selected_colors' not in st.session_state:
         st.session_state.selected_colors = []
     if 'use_colors' not in st.session_state:
@@ -46,8 +46,7 @@ def _initialize_session_state():
     if 'generation_configs' not in st.session_state:
         st.session_state.generation_configs = None
 
-def _show_prompt_section():
-    """Display the prompt input section"""
+def show_prompt_section():
     st.subheader("Generate a Image Prompt")
     prompt_type = st.selectbox(
         "Choose an option:",
@@ -81,6 +80,7 @@ def _show_prompt_section():
                 image = None
                 if reference_image:
                     image = encode_image_base64(reference_image)
+                    st.session_state.ref_image = image
                 st.session_state.image_prompt = gen_mm_image_prompt(
                     keyword=multimodal_keyword_text,
                     image=image,
@@ -89,8 +89,7 @@ def _show_prompt_section():
                     top_k=top_k
                 )
 
-def _show_image_prompt_section():
-    """Display the generated image prompt section"""
+def show_image_prompt_section():
     st.subheader("Image Prompt")
     prompt_value = st.text_area(
         label="Edit or modify the prompt",
@@ -101,12 +100,13 @@ def _show_image_prompt_section():
     if prompt_value != st.session_state.image_prompt:
         st.session_state.image_prompt = prompt_value
 
-def _show_model_section():
-    """Display the model configuration and generation section"""
+def show_model_section():
     st.subheader("Select Image Model")
     model_type = st.selectbox(
         "Choose a model:",
-        [BedrockModel.NOVA_CANVAS.value, BedrockModel.TITAN_IMAGE.value]
+        [BedrockModel.NOVA_CANVAS, BedrockModel.TITAN_IMAGE,
+         BedrockModel.STABLE_IMAGE_CORE, BedrockModel.STABLE_IMAGE_ULTRA, BedrockModel.SD3_LARGE],
+         format_func=lambda x: x.name
     )
 
     st.session_state.model_type = model_type
@@ -117,88 +117,44 @@ def _show_model_section():
     
     return st.button("Generate Images", icon='🎨', type="primary", use_container_width=True)
 
-def _get_model_configurations(model_type):
-    """Get model configurations from user input"""
-    num_images = st.slider("Number of Images", 1, 5, 1)
-    cfg_scale = st.slider("CFG Scale", 1.0, 10.0, 8.0, 0.5)
-    seed = st.number_input("Seed", 0, 2147483646, 0)
-    
-    if model_type == BedrockModel.TITAN_IMAGE.value:
-        size_enum = TitanImageSize
-    elif model_type == BedrockModel.NOVA_CANVAS.value:
-        size_enum = NovaImageSize
-    size_options = {f"{size.width} X {size.height}": size for size in size_enum}
-    selected_size = st.selectbox("Image Size", options=list(size_options.keys()))
-    
-    use_colors = st.checkbox("Using color references")
-    selected_colors = []
-    
-    if use_colors:
-        selected_colors = _handle_color_selection()
-        st.session_state.use_colors = True
-        st.session_state.selected_colors = selected_colors
-    else:
-        st.session_state.use_colors = False
-        st.session_state.selected_colors = []
-    
-    return {
-        'num_images': num_images,
-        'cfg_scale': cfg_scale,
-        'seed': seed,
-        'size': size_options[selected_size],
-        'use_colors': use_colors,
-        'selected_colors': selected_colors
-    }
-
-def _show_generated_images_section(session_manager: SessionManager):
-    """Display the generated images section"""
+def generate_image(session_manager: SessionManager):
     st.divider()
     st.subheader("Generated Images")
     
     with st.status("Generating images...", expanded=True) as status:
         try:
             configs = st.session_state.generation_configs
-            img_params = ImageParams(seed=configs['seed'])
-            img_params.set_configuration(
+
+            model_type = BedrockModel(st.session_state.model_type)
+            imgs, configuration = gen_image(
+                prompt = st.session_state.image_prompt,
+                model_type=model_type,
+                size=configs['size'],
                 count=configs['num_images'],
-                width=configs['size'].width,
-                height=configs['size'].height,
-                cfg=configs['cfg_scale']
+                seed=configs['seed'],
+                cfg=configs['cfg_scale'],
+                color_guide=configs['selected_colors']
             )
 
-            configuration = img_params.get_configuration()
-            
-            if configs['use_colors']:
-                body = img_params.color_guide(
-                    text=st.session_state.image_prompt, 
-                    colors=configs['selected_colors']
-                )
-                configuration['colorGuide'] = configs['selected_colors']
-            else:
-                body = img_params.text_to_image(
-                    text=st.session_state.image_prompt
-                )
-            
-            model_type = BedrockModel(st.session_state.model_type)
-            imgs = gen_image(body=body, modelId=model_type)
-            
-            # Display prompt
+            print(configuration)
+
+            # Display prompt and generated image
             st.info(st.session_state.image_prompt)
-            
             cols = st.columns(len(imgs))
             for idx, img in enumerate(imgs):
                 with cols[idx]:
                     image_data = base64_to_bytes(img)
                     st.image(image_data, use_container_width=True)
             
-            # Add to history
-            session_manager.add_to_history(
-                media_type = MediaType.IMAGE,
-                prompt = st.session_state.image_prompt,
-                model_type = model_type,
-                media_file=image_data,
-                details = configuration,
-            )
+                # Add to history
+                session_manager.add_to_history(
+                    prompt=st.session_state.image_prompt,
+                    media_type = MediaType.IMAGE,
+                    model_type = model_type,
+                    media_file=image_data,
+                    details = configuration,
+                    ref_image = st.session_state.ref_image,
+                )
             
             status.update(label="Generation completed!", state="complete")
             
@@ -208,8 +164,50 @@ def _show_generated_images_section(session_manager: SessionManager):
         finally:
             st.session_state.is_generating_image = False
 
+def _get_model_configurations(model_type: str):
+    disabled = is_sd_model(model_type)
+    num_images = st.slider("Number of Images", 1, 5, 1, disabled=disabled)
+    cfg_scale = st.slider("CFG Scale", 1.0, 10.0, 8.0, 0.5, disabled=disabled)
+    seed = st.number_input("Seed", 0, 2147483646, 0)
+    
+    # size
+    if model_type == BedrockModel.TITAN_IMAGE:
+        size_enum = TitanImageSize
+        size_options = {f"{size.width} X {size.height}": size for size in size_enum}
+    elif model_type == BedrockModel.NOVA_CANVAS:
+        size_enum = NovaImageSize
+        size_options = {f"{size.width} X {size.height}": size for size in size_enum}
+    else: # stable diffusion models
+        size_enum = SDImageSize
+        size_options = {size.value: size for size in size_enum}
+    
+    selected_size = st.selectbox("Image Size", options=list(size_options.keys()))
+    
+    # color guide
+    use_colors = st.checkbox(
+        "Using color references",
+        disabled=disabled
+    )
+    selected_colors = []
+
+    if use_colors:
+        selected_colors = _handle_color_selection()
+        st.session_state.use_colors = True
+        st.session_state.selected_colors = selected_colors
+    else:
+        st.session_state.use_colors = False
+        st.session_state.selected_colors = []
+
+    return {
+        'num_images': num_images,
+        'cfg_scale': cfg_scale,
+        'seed': seed,
+        'size': size_options[selected_size],
+        'use_colors': use_colors,
+        'selected_colors': selected_colors
+    }
+
 def _handle_color_selection() -> List[str]:
-    """Handle color selection UI and logic"""
     color_picker = st.color_picker("Pick a color")
     
     if color_picker and color_picker not in st.session_state.selected_colors:
@@ -228,7 +226,6 @@ def _handle_color_selection() -> List[str]:
     return selected_colors
 
 def _display_color_preview(colors: List[str]):
-    """Display color preview boxes"""
     color_html = "<div style='display: flex; flex-wrap: wrap;'>"
     for color in colors:
         color_html += (

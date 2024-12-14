@@ -1,12 +1,9 @@
 import streamlit as st
-from datetime import datetime
 from typing import Dict, Any, BinaryIO, Optional
 from genai_kit.aws.bedrock import BedrockModel
-from config import config
 from services.storage_service import StorageService
-from apps.bedrock_gallery.services.task_manager import AsyncTaskManager
-from apps.bedrock_gallery.utils import extract_key_from_uri
-from apps.bedrock_gallery.types import MediaType
+from config import config
+from enums import MediaType
 
 
 class SessionManager:
@@ -23,6 +20,7 @@ class SessionManager:
         model_type: BedrockModel, 
         details: Optional[Dict[str, Any]] = None,
         media_file: Optional[BinaryIO] = None,
+        ref_image: Optional[str] = None,
     ):
         if 'request_history' not in st.session_state:
             st.session_state.request_history = []
@@ -34,7 +32,8 @@ class SessionManager:
                 model_type=model_type,
                 prompt=prompt,
                 details=details,
-                image=media_file,
+                media_file=media_file,
+                ref_image=ref_image,
             )
         except Exception as e:
             st.error(f"Failed to upload media: {str(e)}")

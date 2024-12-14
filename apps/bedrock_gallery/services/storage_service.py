@@ -1,15 +1,15 @@
+
 import boto3
-from io import BytesIO
 from typing import Dict, Any, BinaryIO, List, Optional
 from datetime import datetime
-from apps.bedrock_gallery.services.bedrock_service import list_video_job
-from config import config
 from genai_kit.aws.bedrock import BedrockModel
 from genai_kit.aws.dynamodb import DynamoDB
 from genai_kit.utils.random import random_id
-from genai_kit.utils.images import get_thumbnail
-from apps.bedrock_gallery.utils import extract_key_from_uri
-from apps.bedrock_gallery.types import MediaType
+from services.bedrock_service import list_video_job
+from utils import extract_key_from_uri
+from enums import MediaType
+from config import config
+from constants import IMAGE_PREFIX, VIDEO_OUTPUT_FILE, VIDEO_PREFIX
 
 
 class StorageService:
@@ -19,34 +19,22 @@ class StorageService:
         self.bucket_name = bucket_name
         self.cloudfront_domain = cloudfront_domain
         
-    def upload_to_s3(self, image: BinaryIO, image_id: str) -> str:
-        filename = f"{image_id}.png"
-        
-        try:
-            self.s3_client.upload_fileobj(
-                image,
-                self.bucket_name,
-                filename,
-                ExtraArgs={'ContentType': 'image/png'}
-            )
-            return f"{self.cloudfront_domain}/{filename}"
-        except Exception as e:
-            raise Exception(f"Failed to upload image to S3: {str(e)}")
-        
     def upload_media(
         self,
         media_type: MediaType,
         model_type: BedrockModel,
         prompt: str,
         details: Optional[Dict[str, Any]] = None,
-        image: Optional[BinaryIO] = None,
+        media_file: Optional[BinaryIO] = None,
+        ref_image: Optional[str] = None,
     ):
         if media_type == MediaType.IMAGE:
             return self.upload_image(
                 model_type=model_type.value,
                 prompt=prompt,
                 details=details,
-                image=image,
+                media_file=media_file,
+                ref_image=ref_image,
             )
         elif media_type == MediaType.VIDEO:
             s3Uri = details.get("outputDataConfig", {}).get("s3OutputDataConfig", {}).get("s3Uri", "")
@@ -55,7 +43,7 @@ class StorageService:
                 model_type=model_type.value,
                 prompt=prompt,
                 details=details,
-                image=image,
+                ref_image=ref_image,
                 id=id,
             )    
 
@@ -64,25 +52,26 @@ class StorageService:
         model_type: str,
         prompt: str,
         details: Dict[str, Any],
-        image: Optional[BinaryIO] = None,
-        thumbnail: Optional[str] = None,
+        media_file: Optional[BinaryIO] = None,
+        ref_image: Optional[str] = None,
         id: Optional[str] = None,
     ) -> Dict[str, Any]:
         image_id = id or random_id()
+        key = f"{IMAGE_PREFIX}/{image_id}"
         now = datetime.now().isoformat()
         url = None
 
-        if image:
-            url = self.upload_to_s3(image, image_id)
+        if media_file:
+            url = self.upload_to_s3(media_file, key)
 
-        url = url or f"{self.cloudfront_domain}/{image_id}"
+        url = url or f"{self.cloudfront_domain}/{key}"
         record = {
             "id": image_id,
             "media_type": MediaType.IMAGE.value,
             "model_type": model_type,
             "prompt": prompt,
+            "ref_image": ref_image,
             "url": url,
-            "thumbnail": thumbnail or url,
             "updated_at": now,
             "details": details
         }
@@ -94,7 +83,6 @@ class StorageService:
                 updates = {
                     'model_type': model_type,
                     'url': record['url'],
-                    'thumbnail': record['thumbnail'],
                     'updated_at': now,
                     'details': details
                 }
@@ -115,11 +103,11 @@ class StorageService:
         model_type: Optional[str] = None,
         prompt: Optional[str] = None,
         details: Optional[Dict[str, Any]] = None,
-        image: Optional[BinaryIO] = None,
-        thumbnail: Optional[str] = None,
+        ref_image: Optional[str] = None,
         id: Optional[str] = None,
     ) -> Dict[str, Any]:
         id = id or random_id()
+        key = f"{VIDEO_PREFIX}/{id}"
         now = datetime.now().isoformat()
         
         record = {
@@ -127,8 +115,8 @@ class StorageService:
             "media_type": MediaType.VIDEO.value,
             "model_type": model_type,
             "prompt": prompt,
-            "url": f"{self.cloudfront_domain}/{id}/output.mp4",
-            "thumbnail": f"{self.cloudfront_domain}/{id}/thumbnail.png",
+            "ref_image": ref_image,
+            "url": f"{self.cloudfront_domain}/{key}/{VIDEO_OUTPUT_FILE}",
             "updated_at": now,
             "details": details
         }
@@ -139,7 +127,6 @@ class StorageService:
             if existing_item:
                 updates = {
                     'url': record['url'],
-                    'thumbnail': record['thumbnail'],
                     'updated_at': now,
                     'details': details
                 }
@@ -155,24 +142,11 @@ class StorageService:
 
         return record
 
-    def get_media_metadata(self, id: str) -> Dict[str, Any]:
-        """
-        Retrieve media metadata from DynamoDB by ID
-        """
-        try:
-            response = self.dynamodb.get_item(id)
-            if not response:
-                return None
-            return response
-        except Exception as e:
-            raise Exception(f"Failed to retrieve metadata: {str(e)}")
-
     def get_media_list(
         self,
         media_type: str = None,
         sync=True,
     ) -> List[Dict[str, Any]]:
-        """Retrieve media list from DynamoDB"""
         try:
             if sync:
                 self.sync_video_jobs()
@@ -192,9 +166,8 @@ class StorageService:
             raise Exception(f"Failed to retrieve media list: {str(e)}")
         
     def sync_video_jobs(self) -> None:
-        """Sync video job statuses from Bedrock and update DynamoDB records."""
         try:
-            job_list = list_video_job()
+            job_list = list_video_job(max_results=10)
             media_list = self.get_media_list(media_type=MediaType.VIDEO.value, sync=False)
             media_map = {item['id']: item for item in media_list}
         
@@ -207,30 +180,25 @@ class StorageService:
                 
                 job_status = job.get('status')
                 if media_map[job_id].get('details', {}).get('status', '') != job_status:
-                    if job_status == 'Completed':
-                        thumbnail = self._save_thumbnail(job_id)
-
-                        self.update_video_status(
-                            details=job,
-                            thumbnail=thumbnail,
-                            id=job_id
-                        )
+                    self.update_video_status(
+                        details=job,
+                        id=job_id
+                    )
 
         except Exception as e:
             raise Exception(f"Failed to sync video jobs: {str(e)}")
         
-    def _save_thumbnail(self, job_id) -> str:
+    def upload_to_s3(self, image: BinaryIO, image_id: str) -> str:
+        filename = f"{image_id}.png"
+        
         try:
-            video_bytes = self.s3_client.get_object(
-                Bucket=config.S3_BUCKET,
-                Key = f"{job_id}/output.mp4"
-            )['Body'].read()
-            thumbnail_bytes = get_thumbnail(video_bytes)
-
-            return self.upload_to_s3(
-                image=BytesIO(thumbnail_bytes),
-                image_id=f"{job_id}/thumbnail",
+            self.s3_client.upload_fileobj(
+                image,
+                self.bucket_name,
+                filename,
+                ExtraArgs={'ContentType': 'image/png'}
             )
+            return f"{self.cloudfront_domain}/{filename}"
         except Exception as e:
-            raise Exception(f"Failed to save thumbnail: {str(e)}")
+            raise Exception(f"Failed to upload image to S3: {str(e)}")
         
