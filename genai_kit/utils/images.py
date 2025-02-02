@@ -6,11 +6,12 @@ import requests
 import tempfile
 from io import BytesIO
 from PIL import Image
+from typing import Tuple
 from IPython.display import display, HTML, Video, Image as IPythonImage
 
 
 # Function to encode image from bytes or PIL.Image
-def encode_image_base64(image, format="JPEG", max_size=(2000, 2000)):
+def encode_image_base64(image, format="PNG", max_size=(2000, 2000)):
     # If the input is not an instance of PIL.Image, open it
     if not isinstance(image, Image.Image):
         image = Image.open(image)
@@ -20,12 +21,12 @@ def encode_image_base64(image, format="JPEG", max_size=(2000, 2000)):
 
     # Save the image to buffer and encode as base64
     buffer = BytesIO()
-    image.convert("RGB").save(buffer, format=format)
+    image.convert('RGB').save(buffer, format=format)
     encoded_image = base64.b64encode(buffer.getvalue())
     return encoded_image.decode('utf-8')
 
 # Function to encode image from a URL
-def encode_image_base64_from_url(img_url, format="JPEG", max_size=(2000, 2000)):
+def encode_image_base64_from_url(img_url, format="PNG", max_size=(2000, 2000)):
     try:
         response = requests.get(img_url, timeout=10)
         response.raise_for_status()  # Raise an error for bad responses
@@ -35,7 +36,7 @@ def encode_image_base64_from_url(img_url, format="JPEG", max_size=(2000, 2000)):
         return None
 
 # Function to encode image from a file path
-def encode_image_base64_from_file(file_path, format="JPEG", max_size=(2000, 2000)):
+def encode_image_base64_from_file(file_path, format="PNG", max_size=(2000, 2000)):
     try:
         with open(file_path, 'rb') as img_file:
             image_data = img_file.read()
@@ -47,11 +48,11 @@ def encode_image_base64_from_file(file_path, format="JPEG", max_size=(2000, 2000
 # Display image given base64-encoded string
 def display_image(utf8_encoded_image, height=200):
     if isinstance(utf8_encoded_image, str):
-        html = f'<img src="data:image/jpeg;base64,{utf8_encoded_image}" height="{height}"/>'
+        html = f'<img src="data:image/png;base64,{utf8_encoded_image}" height="{height}"/>'
         display(HTML(html))
     elif isinstance(utf8_encoded_image, list):
         for img_str in utf8_encoded_image:
-            html = f'<img src="data:image/jpeg;base64,{img_str}" height="{height}"/>'
+            html = f'<img src="data:image/png;base64,{img_str}" height="{height}"/>'
             display(HTML(html))
 
 
@@ -80,7 +81,7 @@ def save_base64_image(base64str: str, path: str):
 
 
 # 바이트 데이터를 사용하여 이미지를 표시하는 함수
-def display_image_from_bytes(image_bytes, format='JPEG', height=200):
+def display_image_from_bytes(image_bytes, format='PNG', height=200):
     """
     바이트 데이터로부터 이미지를 표시합니다.
     """
@@ -92,12 +93,12 @@ def display_image_from_bytes(image_bytes, format='JPEG', height=200):
 
 
 # 이미지로부터 바이트 데이터를 얻는 함수
-def get_image_bytes(image, format="JPEG", max_size=(1000, 1000)):
+def get_image_bytes(image, format="PNG", max_size=(1000, 1000)):
     """
     이미지를 바이트 데이터로 변환합니다.
     Args:
         image: PIL.Image 객체 또는 이미지 파일 경로.
-        format: 원하는 이미지 형식 (예: "JPEG", "PNG", "JPEG").
+        format: 원하는 이미지 형식 (예: "JPEG", "PNG").
         max_size: 이미지의 최대 크기 (너비, 높이).
     Returns:
         bytes: 이미지의 바이트 데이터.
@@ -117,7 +118,7 @@ def get_image_bytes(image, format="JPEG", max_size=(1000, 1000)):
 
 
 # URL에서 이미지를 가져와 바이트 데이터를 얻는 함수
-def get_image_bytes_from_url(img_url, format="JPEG", max_size=(1000, 1000)):
+def get_image_bytes_from_url(img_url, format="PNG", max_size=(1000, 1000)):
     """
     URL에서 이미지를 가져와 바이트 데이터를 반환합니다.
     """
@@ -131,7 +132,7 @@ def get_image_bytes_from_url(img_url, format="JPEG", max_size=(1000, 1000)):
 
 
 # 파일 경로에서 이미지를 가져와 바이트 데이터를 얻는 함수
-def get_image_bytes_from_file(file_path, format="JPEG", max_size=(1000, 1000)):
+def get_image_bytes_from_file(file_path, format="PNG", max_size=(1000, 1000)):
     """
     파일에서 이미지를 읽어 바이트 데이터를 반환합니다.
     """
@@ -195,6 +196,63 @@ def resize_image(img: Image, width=1280, height=720):
     
     # 크롭된 이미지 반환
     return img.crop((left, top, right, bottom))
+
+
+def create_outpainting_mask(source_image: Image,
+                            target_width: int,
+                            target_height: int,
+                            position: Tuple[float, float] = (0.5, 0.5)) -> Image:
+    """
+    Outpainting을 위한 마스크 이미지를 생성합니다.
+    
+    Args:
+        source_image (PIL.Image): 원본 이미지
+        width (int): 확장하고자 하는 최종 너비
+        height (int): 확장하고자 하는 최종 높이
+        position: 원본 이미지 배치 위치 비율 (x, y)
+                 (0.5, 0.5): 중앙
+                 (0.0, 0.0): 좌상단
+                 (1.0, 1.0): 우하단
+                 (0.0, 0.5): 왼쪽 중앙
+        
+    Returns:
+        tuple: 마스크 이미지(PIL.Image), base64로 인코딩된 마스크 이미지(str))
+    """
+    # 원본 이미지 크기
+    src_width, src_height = source_image.size
+    
+    # 새로운 크기가 원본보다 작으면 오류 발생
+    if target_width < src_width or target_height < src_height:
+        raise ValueError(
+            f"Target dimensions({target_width}, {target_height}) must be larger than "
+            f"source image dimensions({src_width}, {src_height})"
+        )
+        
+    # 위치 값을 0~1 사이로 클램핑
+    pos_x, pos_y = position
+    pos_x = max(0.0, min(1.0, pos_x))
+    pos_y = max(0.0, min(1.0, pos_y))
+    
+    # 원본 이미지가 들어갈 영역은 흰색으로 채움
+    # 실제 픽셀 좌표 계산
+    paste_x = int((target_width - src_width) * pos_x)
+    paste_y = int((target_height - src_height) * pos_y)
+    
+    # 확장된 이미지 생성
+    BLACK = (255, 255, 255)
+    WHITE = (0, 0, 0)
+    extended_image = Image.new("RGB", (target_width, target_height), BLACK)
+    extended_image.paste(source_image, (paste_x, paste_y))
+    
+    # 마스크 이미지 생성
+    mask_image = Image.new("RGB", (target_width, target_height), BLACK)
+    original_image_shape = Image.new(
+        "RGB", (src_width, src_height), WHITE
+    )
+    mask_image.paste(original_image_shape, (paste_x, paste_y))
+     
+    return extended_image, mask_image
+
 
 def get_thumbnail(video_bytes: str, timestamp: int = 0):
     video_buffer = io.BytesIO(video_bytes)

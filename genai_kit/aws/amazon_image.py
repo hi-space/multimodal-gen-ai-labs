@@ -103,6 +103,9 @@ class ControlMode(Enum):
     CANNY_EDGE = "CANNY_EDGE"
     SEGMENTATION = "SEGMENTATION"
 
+class OutpaintMode(Enum):
+    DEFAULT = "DEFAULT"
+    PRECISE = "PRECISE"
 
 class ImageParams:
     def __init__(self, count: int = 1, width: int = 512, height: int = 512, cfg: float = 8.0, seed: Optional[int] = None):
@@ -194,18 +197,24 @@ class ImageParams:
     def outpainting(self,
                     image: str,
                     text: str,
-                    mask_prompt: str,
+                    mask_prompt: Optional[str] = None,
+                    mask_image: Optional[str] = None,
+                    mode: Optional[OutpaintMode] = OutpaintMode.DEFAULT,
                     negative_text: Optional[str] = None) -> str:
         params = {
             "outPaintingParams": {
                 "text": text,
                 "image": image,
-                "maskPrompt": mask_prompt,
                 "returnMask": False,
-                "outPaintingMode": "DEFAULT",  # ["DEFAULT" | "PRECISE"]
+                "outPaintingMode": mode.value
             }
         }
-
+        
+        if mask_prompt:
+            params["outPaintingParams"]["maskPrompt"] = mask_prompt
+        elif mask_image:
+            params["outPaintingParams"]["maskImage"] = mask_image
+            
         if negative_text is not None:
             params["outPaintingParams"]["negativeText"] = negative_text
 
