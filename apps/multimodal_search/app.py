@@ -132,13 +132,13 @@ IMAGE_EDITING_TEMPLATE = '''
   "negative_prompt": "영어로 원하지 않는 요소를 설명하는 부정 프롬프트(선택 사항)",
   "additional_parameters": {{
     // 특정 편집 유형에 필요한 매개변수
-    // outpainting의 경우 필수 항목: "mask_prompt": "확장하려는 영역 설명", "mode": "DEFAULT 또는 PRECISE"
+    // inpainting과 outpainting의 경우 필수 항목: "mask_prompt": "마스킹할 객체를 영어로 지정", "mode": "DEFAULT"
   }}
 }}
 ```
 
-주의: outpainting 유형의 경우 "additional_parameters" 내에 "mask_prompt"를 반드시 포함해야 합니다.
-mask_prompt는 이미지의 어느 부분을 확장할지 설명하는 것입니다. (예: "background", "surrounding area", "bottom area" 등)
+주의: inpainting과 outpainting 유형의 경우 "additional_parameters" 내에 "mask_prompt"를 반드시 포함해야 합니다.
+mask_prompt는 이미지에서 마스킹하고자 하는 객체를 설명하는 것입니다. (예: "person", "car", "product" 등)
 
 오직 JSON 형식으로만 응답하세요.
 '''
@@ -682,7 +682,7 @@ class MultimodalAgentSystem:
             body = image_params.inpainting(
                 image=image_base64,
                 text=edit_params.get('edit_instructions', instructions),
-                mask_prompt=edit_params.get('additional_parameters', {}).get('mask_prompt', '변경할 부분'),
+                mask_prompt=edit_params.get('additional_parameters', {}).get('mask_prompt', 'object'),
                 negative_text=edit_params.get('negative_prompt')
             )
             
@@ -717,7 +717,7 @@ class MultimodalAgentSystem:
                         "item_name": original_name, 
                         "image_index": image_index+1 if image_index >= 0 else f"편집된 이미지 {edited_image_index+1}",
                         "instructions": edit_params.get('edit_instructions', instructions),
-                        "mask_prompt": edit_params.get('additional_parameters', {}).get('mask_prompt', '변경할 부분')
+                        "mask_prompt": edit_params.get('additional_parameters', {}).get('mask_prompt', 'object')
                     }
                 )
                 
@@ -794,6 +794,7 @@ class MultimodalAgentSystem:
             image_base64 = encode_image_base64(resized_image)
             
             # 모드 결정
+            print(edit_params)
             mode_str = edit_params.get('additional_parameters', {}).get('mode', 'DEFAULT')
             mode = OutpaintMode.PRECISE if mode_str.upper() == 'PRECISE' else OutpaintMode.DEFAULT
             
@@ -801,7 +802,7 @@ class MultimodalAgentSystem:
             mask_prompt = edit_params.get('additional_parameters', {}).get('mask_prompt')
             if not mask_prompt:
                 # 기본 마스크 프롬프트 설정 - 배경 확장에 적합한 값
-                mask_prompt = "background, surrounding area"
+                mask_prompt = "object"
             
             # 이미지 파라미터 설정
             image_params = ImageParams()
@@ -990,6 +991,10 @@ class MultimodalAgentSystem:
                 agent_type = intent_classification.get('agent_type', 'general_conversation')
                 parameters = intent_classification.get('parameters', {})
                 
+                with st.expander(f"Intent Classification: :blue[{agent_type}]", expanded=False):
+                    if "parameters" in details:
+                        st.json(details["parameters"])
+                
                 # 문자열 비교로 변경하여 에러 가능성 줄이기
                 if agent_type == "product_search":
                     response = self.handle_product_search(parameters)
@@ -1173,8 +1178,8 @@ def main():
                 details = message["details"]
                 agent_type = message.get("agent_type", "general_conversation")
                 
-                # 의도 분류 정보
-                with st.expander(f"의도 분류 정보: :blue[{agent_type}]", expanded=False):
+                # Intent Classification
+                with st.expander(f"Intent Classification: :blue[{agent_type}]", expanded=False):
                     if "parameters" in details:
                         st.json(details["parameters"])
                 
@@ -1241,10 +1246,10 @@ def main():
             with st.chat_message("assistant"):
                 st.markdown(response)
                 
-                # 의도 분류 정보    
-                with st.expander(f"의도 분류 정보: :blue[{agent_type}]", expanded=False):
-                    if "parameters" in details:
-                        st.json(details["parameters"])
+                # Intent Classification    
+                # with st.expander(f"Intent Classification: :blue[{agent_type}]", expanded=False):
+                #     if "parameters" in details:
+                #         st.json(details["parameters"])
                 
                 # 검색 결과가 있으면 표시
                 if "search_results" in details and details["search_results"]:
