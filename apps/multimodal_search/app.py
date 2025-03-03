@@ -355,17 +355,20 @@ class MultimodalAgentSystem:
         # 세션 상태에 검색 결과 저장
         st.session_state.search_results = new_results
         
+        with st.expander("검색 결과"):
+            st.json(new_results)
+        
         # 검색 결과 표시
-        with st.container():
-            st.subheader("상품 검색 결과")
-            cols = st.columns(3)
-            for idx, result in enumerate(new_results):
-                with cols[idx % 3]:
-                    if result['image'] is not None:
-                        st.image(result['image'], caption=f"{idx+1}. {result['item_name']}")
-                    else:
-                        st.error(f"{idx+1}. {result['item_name']} - 이미지 로드 실패")
-                    st.write(result['description'][:100] + "..." if len(result['description']) > 100 else result['description'])
+        # with st.container():
+        #     st.subheader("상품 검색 결과")
+        #     cols = st.columns(3)
+        #     for idx, result in enumerate(new_results):
+        #         with cols[idx % 3]:
+        #             if result['image'] is not None:
+        #                 st.image(result['image'], caption=f"{idx+1}. {result['item_name']}")
+        #             else:
+        #                 st.error(f"{idx+1}. {result['item_name']} - 이미지 로드 실패")
+        #             st.write(result['description'][:100] + "..." if len(result['description']) > 100 else result['description'])
         
         # 응답 생성
         response = f"'{keyword}' 관련 상품을 {len(new_results)}개 찾았습니다. 원하시는 상품이 있으면 번호를 알려주세요."
@@ -409,8 +412,11 @@ class MultimodalAgentSystem:
                 }
                 st.session_state.edited_images.append(edited_image_info)
                 
+                with st.expander("배경 제거된 이미지"):
+                    st.json(edited_image_info)
+                
                 # 이미지 표시
-                st.image(result_image, caption=f"{selected_image['item_name']} - 배경 제거됨")
+                # st.image(result_image, caption=f"{selected_image['item_name']} - 배경 제거됨")
                 
                 return f"{image_index+1}번 상품의 배경을 성공적으로 제거했습니다."
             else:
@@ -473,8 +479,11 @@ class MultimodalAgentSystem:
                 }
                 st.session_state.edited_images.append(edited_image_info)
                 
+                with st.expander("변형된 이미지"):
+                    st.json(edited_image_info)
+                
                 # 이미지 표시
-                st.image(result_image, caption=f"{selected_image['item_name']} - 변형됨")
+                # st.image(result_image, caption=f"{selected_image['item_name']} - 변형됨")
                 
                 return f"{image_index+1}번 상품의 변형 이미지를 생성했습니다."
             else:
@@ -536,9 +545,11 @@ class MultimodalAgentSystem:
                     'timestamp': time.time()
                 }
                 st.session_state.edited_images.append(edited_image_info)
-                
+                with st.expander("인페인팅 이미지"):
+                    st.json(edited_image_info)
+                                
                 # 이미지 표시
-                st.image(result_image, caption=f"{selected_image['item_name']} - 인페인팅 적용됨")
+                # st.image(result_image, caption=f"{selected_image['item_name']} - 인페인팅 적용됨")
                 
                 return f"{image_index+1}번 상품의 인페인팅을 성공적으로 적용했습니다."
             else:
@@ -611,9 +622,11 @@ class MultimodalAgentSystem:
                     'timestamp': time.time()
                 }
                 st.session_state.edited_images.append(edited_image_info)
-                
+                with st.expander("아웃페인팅 이미지"):
+                    st.json(edited_image_info)
+                                    
                 # 이미지 표시
-                st.image(result_image, caption=f"{selected_image['item_name']} - 확장됨")
+                # st.image(result_image, caption=f"{selected_image['item_name']} - 확장됨")
                 
                 return f"{image_index+1}번 상품의 이미지를 확장했습니다."
             else:
@@ -694,6 +707,9 @@ class MultimodalAgentSystem:
             conversation_history = self.get_conversation_history()
             current_products = self.get_current_products_info()
             
+            # 상세 정보를 저장할 딕셔너리
+            details = {}
+            
             # 의도 분류
             try:
                 intent_classification = self.intent_classifier.invoke({
@@ -704,26 +720,59 @@ class MultimodalAgentSystem:
                 
                 # 의도 분류 결과 저장
                 st.session_state.conversation_results[message_id]["intent_classification"] = intent_classification
+                details["parameters"] = intent_classification.get('parameters', {})
                 
                 # 분류된 의도에 따라 적절한 에이전트 호출
                 agent_type = intent_classification.get('agent_type', 'general_conversation')
                 parameters = intent_classification.get('parameters', {})
                 
-                # 디버깅 정보 출력
-                st.write(f"분류된 의도: {agent_type}")
-                st.write(f"파라미터: {parameters}")
-                
                 # 문자열 비교로 변경하여 에러 가능성 줄이기
                 if agent_type == "product_search":
                     response = self.handle_product_search(parameters)
+                    # 검색 결과가 있으면 details에 저장
+                    if st.session_state.search_results:
+                        details["search_results"] = [{
+                            "image": result["image"],
+                            "item_name": result["item_name"],
+                            "description": result["description"]
+                        } for result in st.session_state.search_results]
                 elif agent_type == "background_removal":
                     response = self.handle_background_removal(parameters)
+                    # 편집된 이미지가 있으면 details에 저장
+                    if st.session_state.edited_images:
+                        latest_edit = st.session_state.edited_images[-1]
+                        details["edited_image"] = {
+                            "image": latest_edit["image"],
+                            "type": latest_edit["type"],
+                            "original_name": latest_edit["original_name"]
+                        }
                 elif agent_type == "image_variation":
                     response = self.handle_image_variation(parameters)
+                    if st.session_state.edited_images:
+                        latest_edit = st.session_state.edited_images[-1]
+                        details["edited_image"] = {
+                            "image": latest_edit["image"],
+                            "type": latest_edit["type"],
+                            "original_name": latest_edit["original_name"]
+                        }
                 elif agent_type == "inpainting":
                     response = self.handle_inpainting(parameters)
+                    if st.session_state.edited_images:
+                        latest_edit = st.session_state.edited_images[-1]
+                        details["edited_image"] = {
+                            "image": latest_edit["image"],
+                            "type": latest_edit["type"],
+                            "original_name": latest_edit["original_name"]
+                        }
                 elif agent_type == "outpainting":
                     response = self.handle_outpainting(parameters)
+                    if st.session_state.edited_images:
+                        latest_edit = st.session_state.edited_images[-1]
+                        details["edited_image"] = {
+                            "image": latest_edit["image"],
+                            "type": latest_edit["type"],
+                            "original_name": latest_edit["original_name"]
+                        }
                 elif agent_type == "content_generation":
                     response = self.handle_content_generation(parameters)
                 else:
@@ -732,7 +781,7 @@ class MultimodalAgentSystem:
                 # 응답 저장
                 st.session_state.conversation_results[message_id]["response"] = response
                 
-                return response, agent_type
+                return response, agent_type, details
             
             except Exception as e:
                 import traceback
@@ -742,11 +791,12 @@ class MultimodalAgentSystem:
                 st.code(error_trace)
                 
                 # 기본 응답 제공
-                return f"죄송합니다. 요청을 처리하는 중 오류가 발생했습니다. 다른 질문을 시도해 주세요.", "error"
-                
+                return f"죄송합니다. 요청을 처리하는 중 오류가 발생했습니다. 다른 질문을 시도해 주세요.", "error", {"error": str(e)}
+
+
 
 def main():
-    st.title("이미지 편집 기능이 강화된 상품 검색 챗봇")
+    st.title("🖼️ Multimodal AD Generation")
     
     # 멀티모달 에이전트 시스템 초기화
     agent_system = MultimodalAgentSystem()
@@ -759,6 +809,36 @@ def main():
             # 이미지가 있는 경우 표시
             if 'image' in message:
                 st.image(message['image'])
+            
+            # 어시스턴트 메시지의 경우 세부 정보를 expander로 표시
+            if message["role"] == "assistant" and "details" in message:
+                details = message["details"]
+                agent_type = message.get("agent_type", "general_conversation")
+                
+                # 의도 분류 정보
+                with st.expander("의도 분류 정보", expanded=False):
+                    st.markdown(f"""#### Step  :blue[{agent_type}]""")
+                    if "parameters" in details:
+                        st.json(details["parameters"])
+                
+                # 검색 결과가 있으면 표시
+                if "search_results" in details and details["search_results"]:
+                    with st.expander("검색 결과", expanded=True):
+                        cols = st.columns(3)
+                        for idx, result in enumerate(details["search_results"]):
+                            with cols[idx % 3]:
+                                if 'image' in result:
+                                    st.image(result['image'], caption=f"{idx+1}. {result.get('item_name', '')}")
+                                st.write(result.get('description', '')[:100] + "..." if len(result.get('description', '')) > 100 else result.get('description', ''))
+                
+                # 편집된 이미지가 있으면 표시
+                if "edited_image" in details:
+                    # with st.expander("편집 결과", expanded=True):
+                    #     st.image(details["edited_image"]["image"], 
+                    #             caption=f"{details['edited_image'].get('original_name', '')} - {details['edited_image'].get('type', '')} 적용됨")
+                    with st.expander("편집 결과", expanded=True):
+                        st.image(details["edited_image"]["image"], 
+                                caption=f"{details['edited_image'].get('original_name', '')} - {details['edited_image'].get('type', '')} 적용됨")
     
     # 입력 섹션
     # uploaded_file = st.file_uploader("이미지 업로드", type=["png", "jpg", "jpeg"])
@@ -788,16 +868,42 @@ def main():
         
         # 메시지 처리
         with st.spinner('처리 중...'):
-            response, agent_type = agent_system.process_message(message, uploaded_file)
+            response, agent_type, details = agent_system.process_message(message, uploaded_file)
             
-            # 응답 표시
+            # 응답 저장
             st.session_state.messages.append({
                 "role": "assistant", 
                 "content": response,
-                "agent_type": agent_type
+                "agent_type": agent_type,
+                "details": details
             })
+            
+            # 응답 표시
             with st.chat_message("assistant"):
                 st.markdown(response)
+                
+                # 의도 분류 정보
+                with st.expander("의도 분류 정보", expanded=False):
+                    st.write(f"분류된 의도: {agent_type}")
+                    if "parameters" in details:
+                        st.write("파라미터:")
+                        st.json(details["parameters"])
+                
+                # 검색 결과가 있으면 표시
+                if "search_results" in details and details["search_results"]:
+                    with st.expander("검색 결과", expanded=True):
+                        cols = st.columns(3)
+                        for idx, result in enumerate(details["search_results"]):
+                            with cols[idx % 3]:
+                                if 'image' in result:
+                                    st.image(result['image'], caption=f"{idx+1}. {result.get('item_name', '')}")
+                                st.write(result.get('description', '')[:100] + "..." if len(result.get('description', '')) > 100 else result.get('description', ''))
+                
+                # 편집된 이미지가 있으면 표시
+                if "edited_image" in details:
+                    with st.expander("편집 결과", expanded=True):
+                        st.image(details["edited_image"]["image"], 
+                                caption=f"{details['edited_image'].get('original_name', '')} - {details['edited_image'].get('type', '')} 적용됨")
 
 if __name__ == "__main__":
     main()
