@@ -197,6 +197,41 @@ def resize_image(img: Image, width=1280, height=720):
     # 크롭된 이미지 반환
     return img.crop((left, top, right, bottom))
 
+def resize_image_aspect_ratio(img: Image, target_width=None, target_height=None):
+    original_width, original_height = img.size
+    
+    aspect_ratio = original_width / original_height
+    
+    # 크기 조정 로직
+    if target_width is None and target_height is None:
+        # 목표 크기가 지정되지 않았으면 원본 이미지 반환
+        resized_img = img
+    elif target_width is None:
+        # 높이만 지정된 경우
+        new_height = target_height
+        new_width = int(new_height * aspect_ratio)
+        resized_img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
+    elif target_height is None:
+        # 너비만 지정된 경우
+        new_width = target_width
+        new_height = int(new_width / aspect_ratio)
+        resized_img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
+    else:
+        # 둘 다 지정된 경우, 비율을 유지하면서 지정된 영역 내에 맞추기
+        width_ratio = target_width / original_width
+        height_ratio = target_height / original_height
+        
+        # 더 작은 비율을 사용하여 이미지가 지정된 영역을 넘어가지 않도록 함
+        if width_ratio < height_ratio:
+            new_width = target_width
+            new_height = int(original_height * width_ratio)
+        else:
+            new_height = target_height
+            new_width = int(original_width * height_ratio)
+            
+        resized_img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
+    return resized_img
+
 
 def create_outpainting_mask(source_image: Image,
                             target_width: int,

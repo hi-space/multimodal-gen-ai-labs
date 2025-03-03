@@ -37,7 +37,7 @@ from langchain_community.vectorstores import OpenSearchVectorSearch
 from genai_kit.aws.embedding import BedrockEmbedding
 from genai_kit.aws.claude import BedrockClaude
 from genai_kit.aws.bedrock import BedrockModel
-from genai_kit.utils.images import encode_image_base64, encode_image_base64_from_file, display_image
+from genai_kit.utils.images import encode_image_base64, encode_image_base64_from_file, display_image, resize_image_aspect_ratio
 from genai_kit.aws.amazon_image import BedrockAmazonImage, TitanImageSize, ImageParams, ControlMode, OutpaintMode
 
 
@@ -87,11 +87,10 @@ INTENT_CLASSIFICATION_TEMPLATE = '''
 ```
 {{
   "agent_type": "여기에 유형 입력",
-  "reasoning": "분류 이유 설명",
   "parameters": {{
     // 특정 에이전트에 필요한 매개변수
     // product_search의 경우: "keyword": "영문 검색어"
-    // image_variation/inpainting/outpainting의 경우: "image_index": 이미지 번호, "instructions": "구체적인 지시사항"
+    // image_variation/inpainting/outpainting의 경우: "image_index": 이미지 번호, "instructions": "영문으로 구체적인 지시사항"
   }}
 }}
 ```
@@ -195,7 +194,7 @@ class MultimodalAgentSystem:
     
     def initialize_models(self):
         """모델 초기화"""
-        self.claude = BedrockClaude(region=self.region, modelId=BedrockModel.SONNET_3_5_CR)
+        self.claude = BedrockClaude(region=self.region, modelId=BedrockModel.HAIKU_3_5_CR)
         self.bedrock_embedding = BedrockEmbedding(region=self.region)
         
         # Langchain 모델 초기화
@@ -385,9 +384,12 @@ class MultimodalAgentSystem:
         
         # 선택된 이미지 가져오기
         selected_image = st.session_state.search_results[image_index]
-        image_base64 = selected_image['image_base64']
+        original_image = selected_image['image']
         
         try:
+            resized_image = resize_image_aspect_ratio(original_image, target_width=512, target_height=512)
+            image_base64 = encode_image_base64(resized_image)
+            
             # 이미지 파라미터 설정
             image_params = ImageParams()
             body = image_params.background_removal(image=image_base64)
@@ -401,11 +403,13 @@ class MultimodalAgentSystem:
                 result_image = Image.open(BytesIO(result_image_data))
                 result_image_base64 = encode_image_base64(result_image)
                 
-                # 결과 이미지 저장
+                # 결과 이미지 저장 - 원본 이미지 포함
                 edited_image_info = {
                     'type': 'background_removal',
                     'original_index': image_index,
                     'original_name': selected_image['item_name'],
+                    'original_image': original_image,
+                    'original_image_base64': selected_image['image_base64'],
                     'image': result_image,
                     'image_base64': result_image_base64,
                     'timestamp': time.time()
@@ -415,17 +419,14 @@ class MultimodalAgentSystem:
                 with st.expander("배경 제거된 이미지"):
                     st.json(edited_image_info)
                 
-                # 이미지 표시
-                # st.image(result_image, caption=f"{selected_image['item_name']} - 배경 제거됨")
-                
                 return f"{image_index+1}번 상품의 배경을 성공적으로 제거했습니다."
             else:
                 return "배경 제거 중 오류가 발생했습니다. 다른 이미지를 시도해보세요."
-        
+    
         except Exception as e:
             st.error(f"배경 제거 오류: {str(e)}")
             return f"배경 제거 중 오류가 발생했습니다: {str(e)}"
-    
+      
     def handle_image_variation(self, parameters):
         """이미지 변형 처리"""
         image_index = parameters.get('image_index', 1) - 1
@@ -446,9 +447,12 @@ class MultimodalAgentSystem:
         
         # 선택된 이미지 가져오기
         selected_image = st.session_state.search_results[image_index]
-        image_base64 = selected_image['image_base64']
+        original_image = selected_image['image']
         
         try:
+            resized_image = resize_image_aspect_ratio(original_image, target_width=512, target_height=512)
+            image_base64 = encode_image_base64(resized_image)
+            
             # 이미지 파라미터 설정
             image_params = ImageParams()
             body = image_params.image_variant(
@@ -467,11 +471,13 @@ class MultimodalAgentSystem:
                 result_image = Image.open(BytesIO(result_image_data))
                 result_image_base64 = encode_image_base64(result_image)
                 
-                # 결과 이미지 저장
+                # 결과 이미지 저장 - 원본 이미지 포함
                 edited_image_info = {
                     'type': 'image_variation',
                     'original_index': image_index,
                     'original_name': selected_image['item_name'],
+                    'original_image': original_image,
+                    'original_image_base64': selected_image['image_base64'],
                     'image': result_image,
                     'image_base64': result_image_base64,
                     'instructions': edit_params.get('edit_instructions', instructions),
@@ -482,9 +488,6 @@ class MultimodalAgentSystem:
                 with st.expander("변형된 이미지"):
                     st.json(edited_image_info)
                 
-                # 이미지 표시
-                # st.image(result_image, caption=f"{selected_image['item_name']} - 변형됨")
-                
                 return f"{image_index+1}번 상품의 변형 이미지를 생성했습니다."
             else:
                 return "이미지 변형 중 오류가 발생했습니다. 다른 이미지를 시도해보세요."
@@ -492,6 +495,7 @@ class MultimodalAgentSystem:
         except Exception as e:
             st.error(f"이미지 변형 오류: {str(e)}")
             return f"이미지 변형 중 오류가 발생했습니다: {str(e)}"
+
     
     def handle_inpainting(self, parameters):
         """인페인팅 처리"""
@@ -513,9 +517,12 @@ class MultimodalAgentSystem:
         
         # 선택된 이미지 가져오기
         selected_image = st.session_state.search_results[image_index]
-        image_base64 = selected_image['image_base64']
+        original_image = selected_image['image']
         
         try:
+            resized_image = resize_image_aspect_ratio(original_image, target_width=512, target_height=512)
+            image_base64 = encode_image_base64(resized_image)
+            
             # 이미지 파라미터 설정
             image_params = ImageParams()
             body = image_params.inpainting(
@@ -534,11 +541,13 @@ class MultimodalAgentSystem:
                 result_image = Image.open(BytesIO(result_image_data))
                 result_image_base64 = encode_image_base64(result_image)
                 
-                # 결과 이미지 저장
+                # 결과 이미지 저장 - 원본 이미지 포함
                 edited_image_info = {
                     'type': 'inpainting',
                     'original_index': image_index,
                     'original_name': selected_image['item_name'],
+                    'original_image': original_image,
+                    'original_image_base64': selected_image['image_base64'],
                     'image': result_image,
                     'image_base64': result_image_base64,
                     'instructions': edit_params.get('edit_instructions', instructions),
@@ -547,9 +556,6 @@ class MultimodalAgentSystem:
                 st.session_state.edited_images.append(edited_image_info)
                 with st.expander("인페인팅 이미지"):
                     st.json(edited_image_info)
-                                
-                # 이미지 표시
-                # st.image(result_image, caption=f"{selected_image['item_name']} - 인페인팅 적용됨")
                 
                 return f"{image_index+1}번 상품의 인페인팅을 성공적으로 적용했습니다."
             else:
@@ -558,6 +564,7 @@ class MultimodalAgentSystem:
         except Exception as e:
             st.error(f"인페인팅 오류: {str(e)}")
             return f"인페인팅 중 오류가 발생했습니다: {str(e)}"
+
     
     def handle_outpainting(self, parameters):
         """아웃페인팅 처리"""
@@ -579,9 +586,12 @@ class MultimodalAgentSystem:
         
         # 선택된 이미지 가져오기
         selected_image = st.session_state.search_results[image_index]
-        image_base64 = selected_image['image_base64']
+        original_image = selected_image['image']
         
         try:
+            resized_image = resize_image_aspect_ratio(original_image, target_width=512, target_height=512)
+            image_base64 = encode_image_base64(resized_image)
+            
             # 모드 결정
             mode_str = edit_params.get('additional_parameters', {}).get('mode', 'DEFAULT')
             mode = OutpaintMode.PRECISE if mode_str.upper() == 'PRECISE' else OutpaintMode.DEFAULT
@@ -611,11 +621,13 @@ class MultimodalAgentSystem:
                 result_image = Image.open(BytesIO(result_image_data))
                 result_image_base64 = encode_image_base64(result_image)
                 
-                # 결과 이미지 저장
+                # 결과 이미지 저장 - 원본 이미지 포함
                 edited_image_info = {
                     'type': 'outpainting',
                     'original_index': image_index,
                     'original_name': selected_image['item_name'],
+                    'original_image': original_image,
+                    'original_image_base64': selected_image['image_base64'],
                     'image': result_image,
                     'image_base64': result_image_base64,
                     'instructions': edit_params.get('edit_instructions', instructions),
@@ -624,9 +636,6 @@ class MultimodalAgentSystem:
                 st.session_state.edited_images.append(edited_image_info)
                 with st.expander("아웃페인팅 이미지"):
                     st.json(edited_image_info)
-                                    
-                # 이미지 표시
-                # st.image(result_image, caption=f"{selected_image['item_name']} - 확장됨")
                 
                 return f"{image_index+1}번 상품의 이미지를 확장했습니다."
             else:
@@ -635,6 +644,7 @@ class MultimodalAgentSystem:
         except Exception as e:
             st.error(f"아웃페인팅 오류: {str(e)}")
             return f"아웃페인팅 중 오류가 발생했습니다: {str(e)}"
+
     
     def handle_content_generation(self, parameters):
         """콘텐츠 생성 처리"""
@@ -744,7 +754,8 @@ class MultimodalAgentSystem:
                         details["edited_image"] = {
                             "image": latest_edit["image"],
                             "type": latest_edit["type"],
-                            "original_name": latest_edit["original_name"]
+                            "original_name": latest_edit["original_name"],
+                            "original_image": latest_edit["original_image"]
                         }
                 elif agent_type == "image_variation":
                     response = self.handle_image_variation(parameters)
@@ -753,7 +764,8 @@ class MultimodalAgentSystem:
                         details["edited_image"] = {
                             "image": latest_edit["image"],
                             "type": latest_edit["type"],
-                            "original_name": latest_edit["original_name"]
+                            "original_name": latest_edit["original_name"],
+                            "original_image": latest_edit["original_image"]
                         }
                 elif agent_type == "inpainting":
                     response = self.handle_inpainting(parameters)
@@ -762,7 +774,8 @@ class MultimodalAgentSystem:
                         details["edited_image"] = {
                             "image": latest_edit["image"],
                             "type": latest_edit["type"],
-                            "original_name": latest_edit["original_name"]
+                            "original_name": latest_edit["original_name"],
+                            "original_image": latest_edit["original_image"]
                         }
                 elif agent_type == "outpainting":
                     response = self.handle_outpainting(parameters)
@@ -771,7 +784,8 @@ class MultimodalAgentSystem:
                         details["edited_image"] = {
                             "image": latest_edit["image"],
                             "type": latest_edit["type"],
-                            "original_name": latest_edit["original_name"]
+                            "original_name": latest_edit["original_name"],
+                            "original_image": latest_edit["original_image"]
                         }
                 elif agent_type == "content_generation":
                     response = self.handle_content_generation(parameters)
@@ -816,8 +830,7 @@ def main():
                 agent_type = message.get("agent_type", "general_conversation")
                 
                 # 의도 분류 정보
-                with st.expander("의도 분류 정보", expanded=False):
-                    st.markdown(f"""#### Step  :blue[{agent_type}]""")
+                with st.expander(f"의도 분류 정보: :blue[{agent_type}]", expanded=False):
                     if "parameters" in details:
                         st.json(details["parameters"])
                 
@@ -882,11 +895,9 @@ def main():
             with st.chat_message("assistant"):
                 st.markdown(response)
                 
-                # 의도 분류 정보
-                with st.expander("의도 분류 정보", expanded=False):
-                    st.write(f"분류된 의도: {agent_type}")
+                # 의도 분류 정보    
+                with st.expander(f"의도 분류 정보: :blue[{agent_type}]", expanded=False):
                     if "parameters" in details:
-                        st.write("파라미터:")
                         st.json(details["parameters"])
                 
                 # 검색 결과가 있으면 표시
@@ -902,8 +913,14 @@ def main():
                 # 편집된 이미지가 있으면 표시
                 if "edited_image" in details:
                     with st.expander("편집 결과", expanded=True):
-                        st.image(details["edited_image"]["image"], 
-                                caption=f"{details['edited_image'].get('original_name', '')} - {details['edited_image'].get('type', '')} 적용됨")
+                        # 원본과 편집 이미지를 나란히 표시
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.image(details["edited_image"]["original_image"], 
+                                    caption=f"원본: {details['edited_image'].get('original_name', '')}")
+                        with col2:
+                            st.image(details["edited_image"]["image"], 
+                                    caption=f"편집됨: {details['edited_image'].get('type', '')} 적용")
 
 if __name__ == "__main__":
     main()
