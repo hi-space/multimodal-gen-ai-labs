@@ -266,6 +266,20 @@ class MultimodalAgentSystem:
             st.session_state.edited_images = []
         if "conversation_results" not in st.session_state:
             st.session_state.conversation_results = {}
+        # 작업 기록을 저장할 새로운 세션 상태 추가
+        if "operation_history" not in st.session_state:
+            st.session_state.operation_history = []
+    
+    def add_to_history(self, operation_type, description, details=None):
+        """작업 기록 추가"""
+        timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+        history_item = {
+            "timestamp": timestamp,
+            "operation_type": operation_type,
+            "description": description,
+            "details": details or {}
+        }
+        st.session_state.operation_history.append(history_item)
     
     def get_conversation_history(self, max_messages=10):
         """대화 기록 가져오기"""
@@ -354,8 +368,12 @@ class MultimodalAgentSystem:
         # 세션 상태에 검색 결과 저장
         st.session_state.search_results = new_results
         
-        with st.expander("검색 결과"):
-            st.json(new_results)
+        # 작업 기록에 추가
+        self.add_to_history(
+            "product_search", 
+            f"'{keyword}' 검색 (결과 {len(new_results)}개)",
+            {"keyword": keyword, "result_count": len(new_results)}
+        )
         
         # 검색 결과 표시
         # with st.container():
@@ -416,8 +434,12 @@ class MultimodalAgentSystem:
                 }
                 st.session_state.edited_images.append(edited_image_info)
                 
-                with st.expander("배경 제거된 이미지"):
-                    st.json(edited_image_info)
+                # 작업 기록에 추가
+                self.add_to_history(
+                    "background_removal", 
+                    f"{selected_image['item_name']}의 배경 제거",
+                    {"item_name": selected_image['item_name'], "image_index": image_index+1}
+                )
                 
                 return f"{image_index+1}번 상품의 배경을 성공적으로 제거했습니다."
             else:
@@ -485,8 +507,16 @@ class MultimodalAgentSystem:
                 }
                 st.session_state.edited_images.append(edited_image_info)
                 
-                with st.expander("변형된 이미지"):
-                    st.json(edited_image_info)
+                # 작업 기록에 추가
+                self.add_to_history(
+                    "image_variation", 
+                    f"{selected_image['item_name']}의 이미지 변형",
+                    {
+                        "item_name": selected_image['item_name'], 
+                        "image_index": image_index+1,
+                        "instructions": edit_params.get('edit_instructions', instructions)
+                    }
+                )
                 
                 return f"{image_index+1}번 상품의 변형 이미지를 생성했습니다."
             else:
@@ -554,8 +584,18 @@ class MultimodalAgentSystem:
                     'timestamp': time.time()
                 }
                 st.session_state.edited_images.append(edited_image_info)
-                with st.expander("인페인팅 이미지"):
-                    st.json(edited_image_info)
+                
+                # 작업 기록에 추가
+                self.add_to_history(
+                    "inpainting", 
+                    f"{selected_image['item_name']}의 인페인팅",
+                    {
+                        "item_name": selected_image['item_name'], 
+                        "image_index": image_index+1,
+                        "instructions": edit_params.get('edit_instructions', instructions),
+                        "mask_prompt": edit_params.get('additional_parameters', {}).get('mask_prompt', '변경할 부분')
+                    }
+                )
                 
                 return f"{image_index+1}번 상품의 인페인팅을 성공적으로 적용했습니다."
             else:
@@ -634,8 +674,18 @@ class MultimodalAgentSystem:
                     'timestamp': time.time()
                 }
                 st.session_state.edited_images.append(edited_image_info)
-                with st.expander("아웃페인팅 이미지"):
-                    st.json(edited_image_info)
+                
+                # 작업 기록에 추가
+                self.add_to_history(
+                    "outpainting", 
+                    f"{selected_image['item_name']}의 아웃페인팅",
+                    {
+                        "item_name": selected_image['item_name'], 
+                        "image_index": image_index+1,
+                        "instructions": edit_params.get('edit_instructions', instructions),
+                        "mask_prompt": mask_prompt
+                    }
+                )
                 
                 return f"{image_index+1}번 상품의 이미지를 확장했습니다."
             else:
@@ -678,6 +728,17 @@ class MultimodalAgentSystem:
             'request': parameters.get('instructions', '효과적인 콘텐츠를 생성해주세요.')
         })
         
+        # 작업 기록에 추가
+        self.add_to_history(
+            "content_generation", 
+            f"{'광고 문구' if content_type == 'ad_copy' else '상품 설명'} 생성",
+            {
+                "content_type": content_type,
+                "image_info": image_info,
+                "instructions": parameters.get('instructions', '효과적인 콘텐츠를 생성해주세요.')
+            }
+        )
+        
         return generated_content
     
     def handle_general_conversation(self, message):
@@ -690,6 +751,13 @@ class MultimodalAgentSystem:
             'message': message,
             'product_info': product_info
         })
+        
+        # 작업 기록에 추가
+        self.add_to_history(
+            "general_conversation", 
+            "일반 대화",
+            {"message": message}
+        )
         
         return response
     
@@ -710,6 +778,13 @@ class MultimodalAgentSystem:
         if uploaded_file:
             image = Image.open(uploaded_file)
             st.session_state.current_image = encode_image_base64(image)
+            
+            # 작업 기록에 추가
+            self.add_to_history(
+                "image_upload", 
+                "이미지 업로드",
+                {"file_name": uploaded_file.name if hasattr(uploaded_file, 'name') else "이미지"}
+            )
         
         # 메시지 처리
         if message or uploaded_file:
@@ -804,9 +879,96 @@ class MultimodalAgentSystem:
                 st.write("상세 오류 정보:")
                 st.code(error_trace)
                 
+                # 오류 기록 추가
+                self.add_to_history(
+                    "error", 
+                    f"오류 발생: {str(e)}",
+                    {"error_trace": error_trace}
+                )
+                
                 # 기본 응답 제공
                 return f"죄송합니다. 요청을 처리하는 중 오류가 발생했습니다. 다른 질문을 시도해 주세요.", "error", {"error": str(e)}
-
+    
+    def render_history_sidebar(self):
+        """작업 기록 사이드바 렌더링"""
+        st.sidebar.title("📋 작업 기록")
+        
+        if not st.session_state.operation_history:
+            st.sidebar.info("아직 작업 기록이 없습니다.")
+            return
+        
+        # 작업 유형별 아이콘 매핑
+        icons = {
+            "product_search": "🔍",
+            "background_removal": "✂️",
+            "image_variation": "🖼️",
+            "inpainting": "🖌️",
+            "outpainting": "📏",
+            "content_generation": "📝",
+            "general_conversation": "💬",
+            "image_upload": "📤",
+            "error": "❌"
+        }
+        
+        # 작업 유형별 정렬 옵션
+        sort_options = ["최신순", "작업 유형별"]
+        sort_method = st.sidebar.radio("정렬 방식:", sort_options)
+        
+        # 작업 기록 리스트 생성 (역순으로 정렬하여 최신이 위로 오게 함)
+        history_items = list(st.session_state.operation_history)
+        
+        if sort_method == "작업 유형별":
+            # 작업 유형별로 그룹화
+            history_by_type = {}
+            for item in history_items:
+                op_type = item["operation_type"]
+                if op_type not in history_by_type:
+                    history_by_type[op_type] = []
+                history_by_type[op_type].append(item)
+            
+            # 작업 유형별로 표시
+            for op_type, items in history_by_type.items():
+                icon = icons.get(op_type, "📌")
+                type_name = {
+                    "product_search": "상품 검색",
+                    "background_removal": "배경 제거",
+                    "image_variation": "이미지 변형",
+                    "inpainting": "인페인팅",
+                    "outpainting": "아웃페인팅",
+                    "content_generation": "콘텐츠 생성",
+                    "general_conversation": "일반 대화",
+                    "image_upload": "이미지 업로드",
+                    "error": "오류"
+                }.get(op_type, op_type)
+                
+                st.sidebar.subheader(f"{icon} {type_name}")
+                for item in reversed(items):  # 최신 항목이 위로 오도록 역순 정렬
+                    with st.sidebar.expander(f"{item['timestamp'].split(' ')[1]}: {item['description'][:30]}..." if len(item['description']) > 30 else f"{item['timestamp'].split(' ')[1]}: {item['description']}"):
+                        st.write(f"**시간:** {item['timestamp']}")
+                        st.write(f"**설명:** {item['description']}")
+                        
+                        # 세부 정보가 있는 경우 표시
+                        if item["details"]:
+                            # 이미지가 있는 경우 표시하지 않음 (용량 문제)
+                            details_without_images = {k: v for k, v in item["details"].items() 
+                                                    if not (k == "image" or "image" in k)}
+                            if details_without_images:
+                                st.json(details_without_images)
+        else:  # 최신순
+            for item in reversed(history_items):  # 최신 항목이 위로 오도록 역순 정렬
+                icon = icons.get(item["operation_type"], "📌")
+                with st.sidebar.expander(f"{icon} {item['timestamp'].split(' ')[1]}: {item['description'][:30]}..." if len(item['description']) > 30 else f"{icon} {item['timestamp'].split(' ')[1]}: {item['description']}"):
+                    st.write(f"**시간:** {item['timestamp']}")
+                    st.write(f"**작업:** {item['operation_type']}")
+                    st.write(f"**설명:** {item['description']}")
+                    
+                    # 세부 정보가 있는 경우 표시
+                    if item["details"]:
+                        # 이미지가 있는 경우 표시하지 않음 (용량 문제)
+                        details_without_images = {k: v for k, v in item["details"].items() 
+                                                if not (k == "image" or "image" in k)}
+                        if details_without_images:
+                            st.json(details_without_images)
 
 
 def main():
@@ -814,6 +976,9 @@ def main():
     
     # 멀티모달 에이전트 시스템 초기화
     agent_system = MultimodalAgentSystem()
+    
+    # 사이드바 렌더링
+    agent_system.render_history_sidebar()
     
     # 메시지 기록 표시
     for message in st.session_state.messages:
@@ -846,16 +1011,18 @@ def main():
                 
                 # 편집된 이미지가 있으면 표시
                 if "edited_image" in details:
-                    # with st.expander("편집 결과", expanded=True):
-                    #     st.image(details["edited_image"]["image"], 
-                    #             caption=f"{details['edited_image'].get('original_name', '')} - {details['edited_image'].get('type', '')} 적용됨")
                     with st.expander("편집 결과", expanded=True):
-                        st.image(details["edited_image"]["image"], 
-                                caption=f"{details['edited_image'].get('original_name', '')} - {details['edited_image'].get('type', '')} 적용됨")
+                        # 원본과 편집 이미지를 나란히 표시
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.image(details["edited_image"]["original_image"], 
+                                    caption=f"원본: {details['edited_image'].get('original_name', '')}")
+                        with col2:
+                            st.image(details["edited_image"]["image"], 
+                                    caption=f"편집됨: {details['edited_image'].get('type', '')} 적용")
     
     # 입력 섹션
-    # uploaded_file = st.file_uploader("이미지 업로드", type=["png", "jpg", "jpeg"])
-    uploaded_file = None
+    uploaded_file = st.file_uploader("이미지 업로드", type=["png", "jpg", "jpeg"])
     message = st.chat_input("메시지를 입력하세요...")
     
     if message or uploaded_file:
