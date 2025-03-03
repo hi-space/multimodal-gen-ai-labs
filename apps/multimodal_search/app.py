@@ -73,12 +73,21 @@ INTENT_CLASSIFICATION_TEMPLATE = '''
 - 이전 대화 내용
 - 현재 사용자 질문
 - 현재 표시된 상품 정보
+- 편집된 이미지 정보
+
+특히 중요: 
+- 사용자가 "N번 상품" 또는 "N번 이미지"를 언급하면 반드시 원본 상품 이미지를 사용해야 합니다.
+- 사용자가 "편집된 이미지" 또는 "작업한 이미지"를 언급하면 편집된 이미지를 사용해야 합니다.
+- 사용자가 편집된 이미지를 사용하길 원할 때는 "use_edited_image": true로 설정하고, 특정 번호를 언급하지 않았다면 "edited_image_index": -1을 설정하세요. 이는 가장 최근 편집된 이미지를 의미합니다.
 
 대화 기록:
 {conversation_history}
 
 현재 표시된 상품 정보:
 {current_products}
+
+편집된 이미지 정보:
+{edited_images_info}
 
 사용자 질문: 
 {question}
@@ -90,7 +99,15 @@ INTENT_CLASSIFICATION_TEMPLATE = '''
   "parameters": {{
     // 특정 에이전트에 필요한 매개변수
     // product_search의 경우: "keyword": "영문 검색어"
-    // image_variation/inpainting/outpainting의 경우: "image_index": 이미지 번호, "instructions": "영문으로 구체적인 지시사항"
+    
+    // 원본 이미지 사용 시:
+    //   "image_index": 이미지 번호, 
+    //   "instructions": "영문으로 구체적인 지시사항" (필요한 경우)
+    
+    // 편집된 이미지 사용 시:
+    //   "use_edited_image": true, 
+    //   "edited_image_index": -1 (가장 최근 편집 이미지) 또는 특정 번호, 
+    //   "instructions": "영문으로 구체적인 지시사항" (필요한 경우)
   }}
 }}
 ```
@@ -393,16 +410,45 @@ class MultimodalAgentSystem:
     
     def handle_background_removal(self, parameters):
         """배경 제거 처리"""
-        image_index = parameters.get('image_index', 1) - 1
+        # 편집된 이미지를 사용하는지 확인
+        use_edited_image = parameters.get('use_edited_image', False)
+    
+        if use_edited_image:
+            # 편집된 이미지 인덱스 처리 개선
+            edited_image_index = parameters.get('edited_image_index', -1)
+            
+            # 편집된 이미지가 없는 경우
+            if not st.session_state.edited_images:
+                return "편집된 이미지가 없습니다. 먼저 이미지를 편집해주세요."
+            
+            # -1은 가장 최근 편집된 이미지를 의미
+            if edited_image_index == -1:
+                edited_image_index = len(st.session_state.edited_images) - 1
+            # 범위 검사
+            elif edited_image_index < 0 or edited_image_index >= len(st.session_state.edited_images):
+                return f"유효하지 않은 편집 이미지 번호입니다. 1부터 {len(st.session_state.edited_images)}까지의 번호를 입력해주세요."
+            
+            # 편집된 이미지 정보 가져오기
+            selected_edited_image = st.session_state.edited_images[edited_image_index]
+            original_image = selected_edited_image['image']  # 편집된 이미지를 원본으로 사용
+            original_name = selected_edited_image['original_name']
+            original_image_base64 = selected_edited_image['image_base64']
+            
+            # 이미지 인덱스를 -1로 설정 (편집된 이미지 사용)
+            image_index = -1
+        else:
+            image_index = parameters.get('image_index', 1) - 1
+            
+            if image_index < 0 or image_index >= len(st.session_state.search_results):
+                return f"유효하지 않은 이미지 번호입니다. 1부터 {len(st.session_state.search_results)}까지의 번호를 입력해주세요."
+            
+            # 선택된 이미지 가져오기
+            selected_image = st.session_state.search_results[image_index]
+            original_image = selected_image['image']
+            original_name = selected_image['item_name']
+            original_image_base64 = selected_image['image_base64']
         
-        if image_index < 0 or image_index >= len(st.session_state.search_results):
-            return f"유효하지 않은 이미지 번호입니다. 1부터 {len(st.session_state.search_results)}까지의 번호를 입력해주세요."
-        
-        st.info(f"{image_index+1}번 상품 이미지의 배경을 제거합니다...")
-        
-        # 선택된 이미지 가져오기
-        selected_image = st.session_state.search_results[image_index]
-        original_image = selected_image['image']
+        st.info(f"{'편집된 이미지' if use_edited_image else str(image_index+1)+'번 상품 이미지'}의 배경을 제거합니다...")
         
         try:
             resized_image = resize_image_aspect_ratio(original_image, target_width=512, target_height=512)
@@ -425,9 +471,9 @@ class MultimodalAgentSystem:
                 edited_image_info = {
                     'type': 'background_removal',
                     'original_index': image_index,
-                    'original_name': selected_image['item_name'],
+                    'original_name': original_name,
                     'original_image': original_image,
-                    'original_image_base64': selected_image['image_base64'],
+                    'original_image_base64': original_image_base64,
                     'image': result_image,
                     'image_base64': result_image_base64,
                     'timestamp': time.time()
@@ -437,39 +483,79 @@ class MultimodalAgentSystem:
                 # 작업 기록에 추가
                 self.add_to_history(
                     "background_removal", 
-                    f"{selected_image['item_name']}의 배경 제거",
-                    {"item_name": selected_image['item_name'], "image_index": image_index+1}
+                    f"{original_name}의 배경 제거",
+                    {
+                        "item_name": original_name,
+                        "image_index": image_index+1 if image_index >= 0 else f"편집된 이미지 {edited_image_index+1}"
+                    }
                 )
                 
-                return f"{image_index+1}번 상품의 배경을 성공적으로 제거했습니다."
+                return f"{'편집된 이미지' if use_edited_image else str(image_index+1)+'번 상품'}의 배경을 성공적으로 제거했습니다."
             else:
                 return "배경 제거 중 오류가 발생했습니다. 다른 이미지를 시도해보세요."
-    
+
         except Exception as e:
             st.error(f"배경 제거 오류: {str(e)}")
             return f"배경 제거 중 오류가 발생했습니다: {str(e)}"
       
     def handle_image_variation(self, parameters):
         """이미지 변형 처리"""
-        image_index = parameters.get('image_index', 1) - 1
+        # 편집된 이미지를 사용하는지 확인
+        use_edited_image = parameters.get('use_edited_image', False)
         instructions = parameters.get('instructions', '')
         
-        if image_index < 0 or image_index >= len(st.session_state.search_results):
-            return f"유효하지 않은 이미지 번호입니다. 1부터 {len(st.session_state.search_results)}까지의 번호를 입력해주세요."
+        if use_edited_image:
+            # 편집된 이미지 인덱스 처리 개선
+            edited_image_index = parameters.get('edited_image_index', -1)
+            
+            # 편집된 이미지가 없는 경우
+            if not st.session_state.edited_images:
+                return "편집된 이미지가 없습니다. 먼저 이미지를 편집해주세요."
+            
+            # -1은 가장 최근 편집된 이미지를 의미
+            if edited_image_index == -1:
+                edited_image_index = len(st.session_state.edited_images) - 1
+            # 범위 검사
+            elif edited_image_index < 0 or edited_image_index >= len(st.session_state.edited_images):
+                return f"유효하지 않은 편집 이미지 번호입니다. 1부터 {len(st.session_state.edited_images)}까지의 번호를 입력해주세요."
+            
+            # 편집된 이미지 정보 가져오기
+            selected_edited_image = st.session_state.edited_images[edited_image_index]
+            original_image = selected_edited_image['image']  # 편집된 이미지를 원본으로 사용
+            original_name = selected_edited_image['original_name']
+            original_image_base64 = selected_edited_image['image_base64']
+            
+            # 이미지 인덱스를 -1로 설정 (편집된 이미지 사용)
+            image_index = -1
+            
+            # 이미지 편집 매개변수 추출
+            edit_params = self.image_editing_agent.invoke({
+                'edit_type': 'image_variation',
+                'request': instructions,
+                'image_index': f"편집된 이미지 {edited_image_index + 1}",
+                'image_info': original_name
+            })
+        else:
+            image_index = parameters.get('image_index', 1) - 1
+            
+            if image_index < 0 or image_index >= len(st.session_state.search_results):
+                return f"유효하지 않은 이미지 번호입니다. 1부터 {len(st.session_state.search_results)}까지의 번호를 입력해주세요."
+            
+            # 선택된 이미지 가져오기
+            selected_image = st.session_state.search_results[image_index]
+            original_image = selected_image['image']
+            original_name = selected_image['item_name']
+            original_image_base64 = selected_image['image_base64']
+            
+            # 이미지 편집 매개변수 추출
+            edit_params = self.image_editing_agent.invoke({
+                'edit_type': 'image_variation',
+                'request': instructions,
+                'image_index': image_index + 1,
+                'image_info': original_name
+            })
         
-        # 이미지 편집 매개변수 추출
-        edit_params = self.image_editing_agent.invoke({
-            'edit_type': 'image_variation',
-            'request': instructions,
-            'image_index': image_index + 1,
-            'image_info': st.session_state.search_results[image_index]['item_name']
-        })
-        
-        st.info(f"{image_index+1}번 상품 이미지의 변형을 생성합니다...")
-        
-        # 선택된 이미지 가져오기
-        selected_image = st.session_state.search_results[image_index]
-        original_image = selected_image['image']
+        st.info(f"{'편집된 이미지' if use_edited_image else str(image_index+1)+'번 상품 이미지'}의 변형을 생성합니다...")
         
         try:
             resized_image = resize_image_aspect_ratio(original_image, target_width=512, target_height=512)
@@ -497,9 +583,9 @@ class MultimodalAgentSystem:
                 edited_image_info = {
                     'type': 'image_variation',
                     'original_index': image_index,
-                    'original_name': selected_image['item_name'],
+                    'original_name': original_name,
                     'original_image': original_image,
-                    'original_image_base64': selected_image['image_base64'],
+                    'original_image_base64': original_image_base64,
                     'image': result_image,
                     'image_base64': result_image_base64,
                     'instructions': edit_params.get('edit_instructions', instructions),
@@ -510,15 +596,15 @@ class MultimodalAgentSystem:
                 # 작업 기록에 추가
                 self.add_to_history(
                     "image_variation", 
-                    f"{selected_image['item_name']}의 이미지 변형",
+                    f"{original_name}의 이미지 변형",
                     {
-                        "item_name": selected_image['item_name'], 
-                        "image_index": image_index+1,
+                        "item_name": original_name, 
+                        "image_index": image_index+1 if image_index >= 0 else f"편집된 이미지 {edited_image_index+1}",
                         "instructions": edit_params.get('edit_instructions', instructions)
                     }
                 )
                 
-                return f"{image_index+1}번 상품의 변형 이미지를 생성했습니다."
+                return f"{'편집된 이미지' if use_edited_image else str(image_index+1)+'번 상품'}의 변형 이미지를 생성했습니다."
             else:
                 return "이미지 변형 중 오류가 발생했습니다. 다른 이미지를 시도해보세요."
         
@@ -529,25 +615,63 @@ class MultimodalAgentSystem:
     
     def handle_inpainting(self, parameters):
         """인페인팅 처리"""
-        image_index = parameters.get('image_index', 1) - 1
+        # 편집된 이미지를 사용하는지 확인
+        use_edited_image = parameters.get('use_edited_image', False)
         instructions = parameters.get('instructions', '')
         
-        if image_index < 0 or image_index >= len(st.session_state.search_results):
-            return f"유효하지 않은 이미지 번호입니다. 1부터 {len(st.session_state.search_results)}까지의 번호를 입력해주세요."
         
-        # 이미지 편집 매개변수 추출
-        edit_params = self.image_editing_agent.invoke({
-            'edit_type': 'inpainting',
-            'request': instructions,
-            'image_index': image_index + 1,
-            'image_info': st.session_state.search_results[image_index]['item_name']
-        })
+        if use_edited_image:
+            # 편집된 이미지 인덱스 처리 개선
+            edited_image_index = parameters.get('edited_image_index', -1)
+            
+            # 편집된 이미지가 없는 경우
+            if not st.session_state.edited_images:
+                return "편집된 이미지가 없습니다. 먼저 이미지를 편집해주세요."
+            
+            # -1은 가장 최근 편집된 이미지를 의미
+            if edited_image_index == -1:
+                edited_image_index = len(st.session_state.edited_images) - 1
+            # 범위 검사
+            elif edited_image_index < 0 or edited_image_index >= len(st.session_state.edited_images):
+                return f"유효하지 않은 편집 이미지 번호입니다. 1부터 {len(st.session_state.edited_images)}까지의 번호를 입력해주세요."
+            
+            # 편집된 이미지 정보 가져오기
+            selected_edited_image = st.session_state.edited_images[edited_image_index]
+            original_image = selected_edited_image['image']  # 편집된 이미지를 원본으로 사용
+            original_name = selected_edited_image['original_name']
+            original_image_base64 = selected_edited_image['image_base64']
+            
+            # 이미지 인덱스를 -1로 설정 (편집된 이미지 사용)
+            image_index = -1
+            
+            # 이미지 편집 매개변수 추출
+            edit_params = self.image_editing_agent.invoke({
+                'edit_type': 'inpainting',
+                'request': instructions,
+                'image_index': f"편집된 이미지 {edited_image_index + 1}",
+                'image_info': original_name
+            })
+        else:
+            image_index = parameters.get('image_index', 1) - 1
+            
+            if image_index < 0 or image_index >= len(st.session_state.search_results):
+                return f"유효하지 않은 이미지 번호입니다. 1부터 {len(st.session_state.search_results)}까지의 번호를 입력해주세요."
+            
+            # 선택된 이미지 가져오기
+            selected_image = st.session_state.search_results[image_index]
+            original_image = selected_image['image']
+            original_name = selected_image['item_name']
+            original_image_base64 = selected_image['image_base64']
+            
+            # 이미지 편집 매개변수 추출
+            edit_params = self.image_editing_agent.invoke({
+                'edit_type': 'inpainting',
+                'request': instructions,
+                'image_index': image_index + 1,
+                'image_info': original_name
+            })
         
-        st.info(f"{image_index+1}번 상품 이미지의 특정 부분을 수정합니다...")
-        
-        # 선택된 이미지 가져오기
-        selected_image = st.session_state.search_results[image_index]
-        original_image = selected_image['image']
+        st.info(f"{'편집된 이미지' if use_edited_image else str(image_index+1)+'번 상품 이미지'}의 특정 부분을 수정합니다...")
         
         try:
             resized_image = resize_image_aspect_ratio(original_image, target_width=512, target_height=512)
@@ -575,9 +699,9 @@ class MultimodalAgentSystem:
                 edited_image_info = {
                     'type': 'inpainting',
                     'original_index': image_index,
-                    'original_name': selected_image['item_name'],
+                    'original_name': original_name,
                     'original_image': original_image,
-                    'original_image_base64': selected_image['image_base64'],
+                    'original_image_base64': original_image_base64,
                     'image': result_image,
                     'image_base64': result_image_base64,
                     'instructions': edit_params.get('edit_instructions', instructions),
@@ -588,45 +712,82 @@ class MultimodalAgentSystem:
                 # 작업 기록에 추가
                 self.add_to_history(
                     "inpainting", 
-                    f"{selected_image['item_name']}의 인페인팅",
+                    f"{original_name}의 인페인팅",
                     {
-                        "item_name": selected_image['item_name'], 
-                        "image_index": image_index+1,
+                        "item_name": original_name, 
+                        "image_index": image_index+1 if image_index >= 0 else f"편집된 이미지 {edited_image_index+1}",
                         "instructions": edit_params.get('edit_instructions', instructions),
                         "mask_prompt": edit_params.get('additional_parameters', {}).get('mask_prompt', '변경할 부분')
                     }
                 )
                 
-                return f"{image_index+1}번 상품의 인페인팅을 성공적으로 적용했습니다."
+                return f"{'편집된 이미지' if use_edited_image else str(image_index+1)+'번 상품'}의 인페인팅을 성공적으로 적용했습니다."
             else:
                 return "인페인팅 중 오류가 발생했습니다. 다른 이미지를 시도해보세요."
         
         except Exception as e:
             st.error(f"인페인팅 오류: {str(e)}")
             return f"인페인팅 중 오류가 발생했습니다: {str(e)}"
-
     
+
     def handle_outpainting(self, parameters):
         """아웃페인팅 처리"""
-        image_index = parameters.get('image_index', 1) - 1
+        # 편집된 이미지를 사용하는지 확인
+        use_edited_image = parameters.get('use_edited_image', False)
         instructions = parameters.get('instructions', '')
         
-        if image_index < 0 or image_index >= len(st.session_state.search_results):
-            return f"유효하지 않은 이미지 번호입니다. 1부터 {len(st.session_state.search_results)}까지의 번호를 입력해주세요."
+        if use_edited_image:
+            # 편집된 이미지 인덱스 처리 개선
+            edited_image_index = parameters.get('edited_image_index', -1)
+            
+            # 편집된 이미지가 없는 경우
+            if not st.session_state.edited_images:
+                return "편집된 이미지가 없습니다. 먼저 이미지를 편집해주세요."
+            
+            # -1은 가장 최근 편집된 이미지를 의미
+            if edited_image_index == -1:
+                edited_image_index = len(st.session_state.edited_images) - 1
+            # 범위 검사
+            elif edited_image_index < 0 or edited_image_index >= len(st.session_state.edited_images):
+                return f"유효하지 않은 편집 이미지 번호입니다. 1부터 {len(st.session_state.edited_images)}까지의 번호를 입력해주세요."
+            
+            # 편집된 이미지 정보 가져오기
+            selected_edited_image = st.session_state.edited_images[edited_image_index]
+            original_image = selected_edited_image['image']  # 편집된 이미지를 원본으로 사용
+            original_name = selected_edited_image['original_name']
+            original_image_base64 = selected_edited_image['image_base64']
+            
+            # 이미지 인덱스를 -1로 설정 (편집된 이미지 사용)
+            image_index = -1
+            
+            # 이미지 편집 매개변수 추출 (후처리 포함)
+            edit_params = self.image_editing_agent_with_processing({
+                'edit_type': 'outpainting',
+                'request': instructions,
+                'image_index': f"편집된 이미지 {edited_image_index + 1}",
+                'image_info': original_name
+            })
+        else:
+            image_index = parameters.get('image_index', 1) - 1
+            
+            if image_index < 0 or image_index >= len(st.session_state.search_results):
+                return f"유효하지 않은 이미지 번호입니다. 1부터 {len(st.session_state.search_results)}까지의 번호를 입력해주세요."
+            
+            # 선택된 이미지 가져오기
+            selected_image = st.session_state.search_results[image_index]
+            original_image = selected_image['image']
+            original_name = selected_image['item_name']
+            original_image_base64 = selected_image['image_base64']
+            
+            # 이미지 편집 매개변수 추출 (후처리 포함)
+            edit_params = self.image_editing_agent_with_processing({
+                'edit_type': 'outpainting',
+                'request': instructions,
+                'image_index': image_index + 1,
+                'image_info': original_name
+            })
         
-        # 이미지 편집 매개변수 추출 (후처리 포함)
-        edit_params = self.image_editing_agent_with_processing({
-            'edit_type': 'outpainting',
-            'request': instructions,
-            'image_index': image_index + 1,
-            'image_info': st.session_state.search_results[image_index]['item_name']
-        })
-        
-        st.info(f"{image_index+1}번 상품 이미지를 확장합니다...")
-        
-        # 선택된 이미지 가져오기
-        selected_image = st.session_state.search_results[image_index]
-        original_image = selected_image['image']
+        st.info(f"{'편집된 이미지' if use_edited_image else str(image_index+1)+'번 상품 이미지'}를 확장합니다...")
         
         try:
             resized_image = resize_image_aspect_ratio(original_image, target_width=512, target_height=512)
@@ -665,9 +826,9 @@ class MultimodalAgentSystem:
                 edited_image_info = {
                     'type': 'outpainting',
                     'original_index': image_index,
-                    'original_name': selected_image['item_name'],
+                    'original_name': original_name,
                     'original_image': original_image,
-                    'original_image_base64': selected_image['image_base64'],
+                    'original_image_base64': original_image_base64,
                     'image': result_image,
                     'image_base64': result_image_base64,
                     'instructions': edit_params.get('edit_instructions', instructions),
@@ -678,23 +839,22 @@ class MultimodalAgentSystem:
                 # 작업 기록에 추가
                 self.add_to_history(
                     "outpainting", 
-                    f"{selected_image['item_name']}의 아웃페인팅",
+                    f"{original_name}의 아웃페인팅",
                     {
-                        "item_name": selected_image['item_name'], 
-                        "image_index": image_index+1,
+                        "item_name": original_name, 
+                        "image_index": image_index+1 if image_index >= 0 else f"편집된 이미지 {edited_image_index+1}",
                         "instructions": edit_params.get('edit_instructions', instructions),
                         "mask_prompt": mask_prompt
                     }
                 )
                 
-                return f"{image_index+1}번 상품의 이미지를 확장했습니다."
+                return f"{'편집된 이미지' if use_edited_image else str(image_index+1)+'번 상품'}의 이미지를 확장했습니다."
             else:
                 return "아웃페인팅 중 오류가 발생했습니다. 다른 이미지를 시도해보세요."
         
         except Exception as e:
             st.error(f"아웃페인팅 오류: {str(e)}")
             return f"아웃페인팅 중 오류가 발생했습니다: {str(e)}"
-
     
     def handle_content_generation(self, parameters):
         """콘텐츠 생성 처리"""
@@ -761,6 +921,22 @@ class MultimodalAgentSystem:
         
         return response
     
+    # MultimodalAgentSystem 클래스에 get_edited_images_info 메서드 추가
+    def get_edited_images_info(self):
+        """편집된 이미지 정보 가져오기"""
+        if not st.session_state.edited_images:
+            return "편집된 이미지가 없습니다."
+        
+        edited_info = []
+        for idx, image in enumerate(st.session_state.edited_images):
+            # 가장 최근 편집 이미지 표시
+            is_latest = idx == len(st.session_state.edited_images) - 1
+            latest_mark = " (최신)" if is_latest else ""
+            
+            edited_info.append(f"편집 이미지 {idx+1}{latest_mark}: {image['original_name']} - 편집 유형: {image['type']}")
+        
+        return "\n".join(edited_info)
+    
     def process_message(self, message, uploaded_file=None):
         """메시지 처리 메인 함수"""
         # 고유 메시지 ID 생성
@@ -791,6 +967,7 @@ class MultimodalAgentSystem:
             # 대화 기록 및 상품 정보 준비
             conversation_history = self.get_conversation_history()
             current_products = self.get_current_products_info()
+            edited_images_info = self.get_edited_images_info() 
             
             # 상세 정보를 저장할 딕셔너리
             details = {}
@@ -800,11 +977,13 @@ class MultimodalAgentSystem:
                 intent_classification = self.intent_classifier.invoke({
                     'conversation_history': conversation_history,
                     'current_products': current_products,
+                    'edited_images_info': edited_images_info, 
                     'question': message if message else "이미지 분석 및 관련 상품 검색"
                 })
                 
                 # 의도 분류 결과 저장
                 st.session_state.conversation_results[message_id]["intent_classification"] = intent_classification
+                                
                 details["parameters"] = intent_classification.get('parameters', {})
                 
                 # 분류된 의도에 따라 적절한 에이전트 호출
