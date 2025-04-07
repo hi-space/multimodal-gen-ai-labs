@@ -39,3 +39,21 @@ VectorDB에 저장된 데이터를 기반으로 semantic 검색 테스트를 합
 ### `3-clean-up.ipynb`
 
 생성한 OpenSearch 리소스들을 삭제합니다.
+
+---
+
+# Streamlit App
+
+## Getting Started
+
+```sh
+streamlit run app.py
+```
+
+## Architecture
+
+![multimodal-gen-architecture](./assets/multimodal-ad-gen-architecture.png)
+
+## Screenshtop
+![multimodal-ad-gen](./assets/multimodal-ad-gen.png)
+
