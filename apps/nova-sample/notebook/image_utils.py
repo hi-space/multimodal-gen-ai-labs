@@ -27,6 +27,15 @@ def encode_image_base64(image, format="JPEG", max_size=(2000, 2000)):
     return encoded_image.decode('utf-8')
 
 
+def base64_to_bytes(base64str: str):
+    return BytesIO(base64.decodebytes(bytes(base64str, "utf-8")))
+
+def base64_to_image(base64str: str):
+    return Image.open(base64_to_bytes(base64str))
+
+def bytes_to_base64(image_bytes: bytes):
+    return base64.b64encode(image_bytes).decode('utf-8')    
+
 # Function to convert byte data to PIL.Image object
 def bytes_to_image(image_bytes: bytes):
     """
