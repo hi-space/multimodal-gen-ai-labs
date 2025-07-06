@@ -85,6 +85,35 @@ class BedrockAmazonVideo():
             }]
             
         return self._generate_video(model_input)
+    
+    def generate_multishot_video(
+        self,
+        text: str,
+        seed: Optional[int] = None,
+        durationSeconds: int = 12, # Must be a multiple of 6 in range [12, 120]
+        fps: int = 24, # Must be 24
+        dimension: str = '1280x720', # Must be "1280x720"
+    ) -> str:
+        """
+        Generate a video from text with an optional input image and seed.
+        
+        Returns:
+            str: The invocation ARN for the async task
+        """
+        model_input = {
+            "taskType": "MULTI_SHOT_AUTOMATED",
+            "multiShotAutomatedParams": {
+                "text": text
+            },
+            "videoGenerationConfig": {
+                "durationSeconds": durationSeconds,
+                "fps": fps,
+                "dimension": dimension,
+                "seed": seed if seed is not None else secrets.randbelow(2147483647)
+            }
+        }
+            
+        return self._generate_video(model_input)
 
     def generate_luma_video(
         self,
