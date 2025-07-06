@@ -24,7 +24,7 @@ class BedrockModel(str, Enum):
     STABLE_IMAGE_CORE = "stability.stable-image-core-v1:0"
     STABLE_IMAGE_ULTRA = "stability.stable-image-ultra-v1:0"    
     NOVA_CANVAS = 'amazon.nova-canvas-v1:0'
-    NOVA_REEL = "amazon.nova-reel-v1:0"
+    NOVA_REEL = "amazon.nova-reel-v1:1"
     LUMA_RAY2 = "luma.ray-v2:0"
 
     '''

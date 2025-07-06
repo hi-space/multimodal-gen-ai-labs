@@ -6,7 +6,7 @@ from typing import Optional
 from urllib.parse import urlparse, quote, unquote
 from botocore.config import Config
 from bedrock_model import BedrockModel
-from genai_kit.aws.s3 import S3
+from amazon_s3 import S3
 
 
 class VideoStatus(Enum):
@@ -51,6 +51,7 @@ class BedrockAmazonVideo():
         self,
         text: str,
         image: Optional[str] = None,
+        imageFormat: str = 'jpeg',
         seed: Optional[int] = None,
         durationSeconds: int = 6,
         fps: int = 24,
@@ -77,7 +78,7 @@ class BedrockAmazonVideo():
 
         if image:
             model_input["textToVideoParams"]["images"] = [{
-                "format": "png",
+                "format": imageFormat,
                 "source": {
                     "bytes": image
                 }

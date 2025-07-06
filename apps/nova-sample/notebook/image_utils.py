@@ -7,7 +7,7 @@ import tempfile
 from io import BytesIO
 from PIL import Image
 from typing import Tuple
-from IPython.display import display, Video, Image as IPythonImage
+from IPython.display import display, HTML, Video, Image as IPythonImage
 
 
 
@@ -49,32 +49,54 @@ def save_image_bytes(image_bytes: bytes, path: str):
 def create_outpainting_mask(source_image: Image,
                             target_width: int,
                             target_height: int,
-                            position: Tuple[float, float] = (0.5, 0.5)) -> Image:
+                            position: Tuple[float, float] = (0.5, 0.5),
+                            size_ratio: float = 1.0):
     """
     Creates a mask image for outpainting.
     
     Args:
         source_image (PIL.Image): Original image
-        width (int): Target final width for expansion
-        height (int): Target final height for expansion
-        position: Placement position ratio of original image (x, y)
+        target_width (int): Target final width for expansion
+        target_height (int): Target final height for expansion
+        position (Tuple[float, float]): Placement position ratio of original image (x, y)
                  (0.5, 0.5): Center
                  (0.0, 0.0): Top left
                  (1.0, 1.0): Bottom right
                  (0.0, 0.5): Left center
+        size_ratio (float): Ratio of the size of the original image to the target size (0.0 < ratio <= 1.0)
         
     Returns:
-        tuple: Mask image (PIL.Image), base64 encoded mask image (str))
+        tuple: (Extended image, mask image)
+        
+    Raises:
+        ValueError: If size_ratio is less than 0 or greater than 1
     """
+    # Validate size_ratio
+    if not 0 < size_ratio <= 1.0:
+        raise ValueError("size_ratio must be in range (0, 1]")
+    
     # Original image size
     src_width, src_height = source_image.size
     
-    # Raise error if new size is smaller than original
-    if target_width < src_width or target_height < src_height:
-        raise ValueError(
-            f"Target dimensions({target_width}, {target_height}) must be larger than "
-            f"source image dimensions({src_width}, {src_height})"
-        )
+    # Calculate resize dimensions based on target size
+    target_ratio = target_width / target_height
+    src_ratio = src_width / src_height
+    
+    if target_ratio > src_ratio:
+        # If target is wider, adjust based on height
+        new_height = int(target_height * size_ratio)
+        new_width = int(new_height * src_ratio)
+    else:
+        # If target is narrower, adjust based on width
+        new_width = int(target_width * size_ratio)
+        new_height = int(new_width / src_ratio)
+    
+    # Resize the image
+    source_image = source_image.resize(
+        (new_width, new_height),
+        Image.Resampling.LANCZOS
+    )
+    src_width, src_height = new_width, new_height
         
     # Clamp position values between 0 and 1
     pos_x, pos_y = position
@@ -100,8 +122,6 @@ def create_outpainting_mask(source_image: Image,
     mask_image.paste(original_image_shape, (paste_x, paste_y))
      
     return extended_image, mask_image
-
-
 
 
 # Function to get byte data from an image
@@ -156,6 +176,17 @@ def get_image_bytes_from_file(file_path, format="JPEG", max_size=(1000, 1000)):
 
 
 
+
+# Display image given base64-encoded string
+def display_image(utf8_encoded_image, height=200):
+    if isinstance(utf8_encoded_image, str):
+        html = f'<img src="data:image/png;base64,{utf8_encoded_image}" height="{height}"/>'
+        display(HTML(html))
+    elif isinstance(utf8_encoded_image, list):
+        for img_str in utf8_encoded_image:
+            html = f'<img src="data:image/png;base64,{img_str}" height="{height}"/>'
+            display(HTML(html))
+            
 
 # Function to display an image using byte data
 def display_image_bytes(image_bytes, format='PNG', height=200):
